@@ -17,8 +17,10 @@ class RemoteRunResult:
 
 class RustRunClient:
     def __init__(self, base_url: str="http://127.0.0.1:8080", timeout: float=15): self.client=httpx.Client(base_url=base_url, timeout=timeout)
-    def create(self, seed: int, max_steps: int | None = None, observation_mode: str = "normal") -> dict:
+    def create(self, seed: int, max_steps: int | None = None, observation_mode: str = "normal", scenario_id: str | None = None) -> dict:
         request = {"seed": seed}
+        if scenario_id is not None:
+            request["scenario_id"] = scenario_id
         if max_steps is not None: request["max_steps"] = max_steps
         request["observation_mode"] = observation_mode
         return self.client.post("/api/runs", json=request).raise_for_status().json()
@@ -34,7 +36,7 @@ class RustRunClient:
     def stop(self, run_id: str, reason: str) -> dict: return self.client.post(f"/api/runs/{run_id}/stop", json={"reason": reason}).raise_for_status().json()
     def close(self) -> None: self.client.close()
 
-def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5) -> RemoteRunResult:
+def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None) -> RemoteRunResult:
     context=AgentContext(memory_mode=memory_mode, memory_window=memory_window); client=RustRunClient(base_url)
     try:
         if max_wall_seconds is not None and max_wall_seconds <= 0: raise ValueError("max_wall_seconds must be positive")
@@ -44,7 +46,7 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
         if restore_replay_id is not None:
             restored=client.restore(restore_replay_id); run_id=restored["run_id"]; observation=restored["observation"]; steps=restored["snapshot"]["step"]
         elif resume_run_id is None:
-            created=client.create(seed, max_steps, observation_mode); run_id=created["run_id"]; observation=created["observation"]; steps=0
+            created=client.create(seed, max_steps, observation_mode, scenario_id); run_id=created["run_id"]; observation=created["observation"]; steps=0
         else:
             run_id=resume_run_id; status=client.status(run_id); steps=status["step"]
             if status["done"]: return RemoteRunResult(run_id,status.get("terminal_reason"),steps,[],"run was already terminal")

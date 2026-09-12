@@ -121,6 +121,6 @@ For a real-browser smoke test, start the three local processes, then run:
 
 This uses pinned `agent-browser` tooling through npm and your installed Chrome (override `-BrowserPath` if needed). It creates a two-step manual run, checks live state, filters, read-only replay navigation, light theme, mobile overflow, and page errors. Screenshots are saved under `data/browser-smoke/`. No browser binary is downloaded and existing browser profiles are not used.
 
-PostgreSQL metadata and full Rust/Python schema parity are not complete yet. The current local workflow deliberately uses individual Rust, Python, and Next.js processes; replay and JSONL persistence remain available without a database service. These limitations are documented rather than masked with fake success claims.
+PostgreSQL metadata and full Rust/Python schema parity are not complete yet. The current local workflow deliberately uses individual Rust, Python, and Next.js processes; replay and JSONL persistence remain available without a database service. The Rust server discovers canonical `scenario.rust.json` files beneath `scenarios/` (or `SIM_SCENARIO_DIR`) and accepts `scenario_id` at run creation. These limitations are documented rather than masked with fake success claims.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md), [RESEARCH.md](RESEARCH.md), [scenario authoring](docs/scenario-authoring.md), and [benchmarking](docs/benchmarking.md).
