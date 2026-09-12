@@ -113,7 +113,8 @@ class TabularQPolicy:
 
 
 def train_tabular_q(
-    environment_factory: Callable[[], Any], policy: TabularQPolicy, seeds: list[int], max_steps: int = 256
+    environment_factory: Callable[[], Any], policy: TabularQPolicy, seeds: list[int], max_steps: int = 256,
+    reset_options_for_seed: Callable[[int], dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Run online Q-learning episodes against an RL-style authoritative environment."""
     if not seeds or max_steps < 1:
@@ -122,7 +123,10 @@ def train_tabular_q(
     with environment_factory() as environment:
         for seed in seeds:
             policy.reset(seed)
-            observation, _ = environment.reset(seed=seed)
+            if reset_options_for_seed:
+                observation, _ = environment.reset(seed=seed, options=reset_options_for_seed(seed))
+            else:
+                observation, _ = environment.reset(seed=seed)
             total_reward = 0.0
             for step in range(1, max_steps + 1):
                 action = policy.act(observation)

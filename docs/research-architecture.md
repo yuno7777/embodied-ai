@@ -42,7 +42,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 
 ## Not implemented
 
-- A trainable non-LLM RL baseline with checkpoint, reload, and held-out evaluation.
+- Held-out evaluation of the tabular Q baseline is not yet integrated into the training command.
 - Noisy/vision/depth/audio sensors.
 - Automatic curriculum generation, distributed infrastructure, unrestricted external tools, or 3D physics.
 
