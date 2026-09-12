@@ -10,7 +10,8 @@ use axum::{
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sim_core::{
-    Action, Environment, Event, Observation, ObservationMode, Scenario, StepResult, WorldSnapshot,
+    Action, Environment, Event, Observation, ObservationMode, RewardConfig, Scenario, StepResult,
+    WorldSnapshot,
     generator::{WorldGenerator, WorldGeneratorConfig, WorldManifest},
 };
 use std::{
@@ -174,6 +175,7 @@ struct CreateRun {
     seed: Option<u64>,
     max_steps: Option<u32>,
     observation_mode: Option<ObservationMode>,
+    reward_config: Option<RewardConfig>,
     #[serde(default)]
     controller: Controller,
 }
@@ -250,6 +252,8 @@ struct Replay {
     /// Present for procedural episodes so they can be replayed after catalog changes.
     #[serde(default)]
     world_manifest: Option<WorldManifest>,
+    #[serde(default)]
+    reward_config: RewardConfig,
     snapshot: WorldSnapshot,
     events: Vec<Event>,
     #[serde(default)]
@@ -299,6 +303,7 @@ fn replay_for(
         observation_mode: env.observation_mode,
         engine_version: "rust-v1".into(),
         world_manifest: world_manifest.cloned(),
+        reward_config: env.reward_config.clone(),
         snapshot: env.snapshot(),
         events: env.events.clone(),
         timeline: timeline.to_vec(),
@@ -444,6 +449,7 @@ async fn create(
         seed: None,
         max_steps: None,
         observation_mode: None,
+        reward_config: None,
         controller: Controller::Provider,
     });
     if request.scenario_id.is_some() && request.generated_world.is_some() {
@@ -474,10 +480,12 @@ async fn create(
     if let Some(max_steps) = request.max_steps {
         configured_scenario.max_steps = max_steps;
     }
-    let env = Environment::new_with_observation_mode(
+    let reward_config = request.reward_config.unwrap_or_default();
+    let env = Environment::new_with_reward_config(
         configured_scenario,
         request.seed.unwrap_or(42),
         request.observation_mode.unwrap_or_default(),
+        reward_config.clone(),
     )
     .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     let id = env.run_id;
@@ -506,7 +514,7 @@ async fn create(
     Ok((
         StatusCode::CREATED,
         Json(
-            serde_json::json!({"run_id":id,"observation":observation,"snapshot":snapshot,"world_manifest":generated_manifest}),
+            serde_json::json!({"run_id":id,"observation":observation,"snapshot":snapshot,"world_manifest":generated_manifest,"reward_config":reward_config}),
         ),
     ))
 }
@@ -588,6 +596,7 @@ async fn replay(
         observation_mode: r.env.observation_mode,
         engine_version: "rust-v1".into(),
         world_manifest: r.world_manifest.clone(),
+        reward_config: r.env.reward_config.clone(),
         snapshot: r.env.snapshot(),
         events: r.env.events.clone(),
         timeline: r.history.clone(),
@@ -649,9 +658,13 @@ async fn restore_replay(
     if saved.max_steps > 0 {
         configured.max_steps = saved.max_steps;
     }
-    let mut env =
-        Environment::new_with_observation_mode(configured, saved.seed, saved.observation_mode)
-            .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))?;
+    let mut env = Environment::new_with_reward_config(
+        configured,
+        saved.seed,
+        saved.observation_mode,
+        saved.reward_config,
+    )
+    .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))?;
     let mut history = vec![env.snapshot()];
     let mut observations = vec![env.observe()];
     for action in &saved.actions {
@@ -1809,6 +1822,46 @@ mod tests {
             serde_json::from_slice::<serde_json::Value>(&replay_body).unwrap()["observation_mode"],
             "minimal"
         );
+    }
+
+    #[tokio::test]
+    async fn custom_reward_configuration_is_authoritative_and_replayable() {
+        let app = app(AppState::default());
+        let created = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/runs")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"seed":42,"reward_config":{"baseline_per_step":-3,"discovery_bonus":7,"invalid_action_penalty":-4,"terminal_success":50,"terminal_failure":-60}}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(created.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(created.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created_json = serde_json::from_slice::<serde_json::Value>(&body).unwrap();
+        assert_eq!(created_json["reward_config"]["baseline_per_step"], -3);
+        let run_id = created_json["run_id"].as_str().unwrap();
+        let replay = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/runs/{run_id}/replay"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let replay_body = axum::body::to_bytes(replay.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let replay_json = serde_json::from_slice::<serde_json::Value>(&replay_body).unwrap();
+        assert_eq!(replay_json["reward_config"]["terminal_success"], 50);
     }
 
     #[tokio::test]

@@ -94,6 +94,21 @@ def test_authoritative_run_creation_rejects_ambiguous_world_source():
         client.create(42, scenario_id="survival_room", generated_world={"seed": 99})
 
 
+def test_authoritative_run_creation_forwards_reward_configuration():
+    calls = []
+    class Response:
+        def raise_for_status(self): return self
+        def json(self): return {"run_id": "test"}
+    class Client:
+        def post(self, path, json):
+            calls.append((path, json)); return Response()
+    client = object.__new__(RustRunClient)
+    client.client = Client()
+    reward_config = {"baseline_per_step": -3, "discovery_bonus": 7}
+    client.create(42, reward_config=reward_config)
+    assert calls[0][1]["reward_config"] == reward_config
+
+
 @pytest.mark.parametrize("failure", [RuntimeError("ProviderUnavailable"), ValueError("Malformed provider response")])
 def test_provider_failure_marks_the_authoritative_run_as_provider_error(monkeypatch, failure):
     calls = []

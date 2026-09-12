@@ -15,6 +15,7 @@ class EmbodiedEnvConfig:
     server_url: str = "http://127.0.0.1:8080"
     scenario_id: str | None = None
     generated_world: dict[str, Any] | None = None
+    reward_config: dict[str, int] | None = None
     observation_mode: str = "normal"
     max_steps: int | None = None
 
@@ -40,15 +41,17 @@ class EmbodiedEnv:
         options = options or {}
         scenario_id = options.get("scenario_id", self.config.scenario_id)
         generated_world = options.get("generated_world", self.config.generated_world)
+        reward_config = options.get("reward_config", self.config.reward_config)
         observation_mode = options.get("observation_mode", self.config.observation_mode)
         max_steps = options.get("max_steps", self.config.max_steps)
-        created = self._client.create(seed, max_steps, observation_mode, scenario_id, generated_world)
+        created = self._client.create(seed, max_steps, observation_mode, scenario_id, generated_world, reward_config)
         self._run_id = created["run_id"]
         observation = created["observation"]
         return observation, {
             "run_id": self._run_id,
             "scenario_id": scenario_id,
             "world_manifest": created.get("world_manifest"),
+            "reward_config": created.get("reward_config"),
             "seed": seed,
             "observation_mode": observation_mode,
         }
