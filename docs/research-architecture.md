@@ -42,7 +42,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 
 ## Not implemented
 
-- Held-out evaluation of the tabular Q baseline is not yet integrated into the training command.
+- The tabular Q baseline is deliberately small and its default action set cannot yet manipulate object-specific IDs, so it is an infrastructure baseline rather than a strong task-solving agent.
 - Noisy/vision/depth/audio sensors.
 - Automatic curriculum generation, distributed infrastructure, unrestricted external tools, or 3D physics.
 
