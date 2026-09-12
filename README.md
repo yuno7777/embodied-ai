@@ -94,6 +94,8 @@ Start the Rust server before either command. Rust events are persisted as replay
 
 `generalize` creates only procedural worlds, keeps its three seed sets disjoint, and writes `generalization_report.json` plus per-episode JSONL. Its report includes each split's success rate with a Wilson 95% interval, reward, episode length, invalid-action rate, exploration/resource metrics, failure reasons, steps/sec, and train-to-held-out gaps. It evaluates policies; it does not train them.
 
+Benchmark summaries report control wall-clock measurements separately from `simulation_steps_per_second`, which is derived from the Rust server's authoritative per-step simulation timings. Provider/model latency is therefore not presented as simulator throughput.
+
 `scripted`, `mock_reasoning`, and `random_valid` require no API key. The Gemini adapter uses the official `google-genai` SDK, structured JSON output, timeouts and post-response Pydantic validation; it is intentionally opt-in.
 
 If an in-run provider call exhausts its retries, the runner marks the authoritative run as `provider_error`, persists the partial replay, and returns a clean terminal result instead of leaving an active run behind.

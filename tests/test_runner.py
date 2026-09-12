@@ -109,6 +109,20 @@ def test_authoritative_run_creation_forwards_reward_configuration():
     assert calls[0][1]["reward_config"] == reward_config
 
 
+def test_rust_client_fetches_authoritative_replay_metadata():
+    calls = []
+    class Response:
+        def raise_for_status(self): return self
+        def json(self): return {"control": {"simulation_latency_us": [12]}}
+    class Client:
+        def get(self, path):
+            calls.append(path); return Response()
+    client = object.__new__(RustRunClient)
+    client.client = Client()
+    assert client.replay("run-1")["control"]["simulation_latency_us"] == [12]
+    assert calls == ["/api/runs/run-1/replay"]
+
+
 def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch):
     class Client:
         def __init__(self, _base_url): pass

@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from .datasets import export_csv, export_jsonl, export_parquet
 from .experiments import ExperimentManifest
 from .providers import CautiousProvider, ExplorerProvider, GeminiProvider, MockReasoningProvider, RandomValidProvider, ScriptedProvider
-from .runner import run_remote
+from .runner import RustRunClient, run_remote
 
 
 @dataclass(frozen=True)
@@ -205,10 +205,17 @@ def benchmark_remote(runs: int, seed_start: int, output: Path, base_url: str, pr
     output.mkdir(parents=True, exist_ok=True)
     def execute(index: int):
         provider=provider_for(provider_name, seed_start+index); result=run_remote(provider, seed_start+index, base_url)
+        client = RustRunClient(base_url)
+        try:
+            control = client.replay(result.run_id).get("control", {})
+        finally:
+            client.close()
+        simulation_latency_us = control.get("simulation_latency_us", []) if isinstance(control, dict) else []
+        simulation_latency_us = [latency for latency in simulation_latency_us if isinstance(latency, (int, float)) and latency >= 0]
         final_metrics=result.records[-1].get("metrics",{}) if result.records else {}
         step_latencies=[record.get("step_latency_ms") for record in result.records if isinstance(record.get("step_latency_ms"),(int,float))]
         elapsed=result.records[-1].get("control_elapsed_ms") if result.records else None
-        row={"run_id":result.run_id,"seed":seed_start+index,"scenario_id":"survival_room","provider":provider.name,"outcome":result.terminal_reason,"steps":result.steps,"score":final_metrics.get("normalized_score",100 if result.terminal_reason=="escaped" else 0),"mean_step_latency_ms":sum(step_latencies)/len(step_latencies) if step_latencies else None,"control_elapsed_ms":elapsed}
+        row={"run_id":result.run_id,"seed":seed_start+index,"scenario_id":"survival_room","provider":provider.name,"outcome":result.terminal_reason,"steps":result.steps,"score":final_metrics.get("normalized_score",100 if result.terminal_reason=="escaped" else 0),"mean_step_latency_ms":sum(step_latencies)/len(step_latencies) if step_latencies else None,"control_elapsed_ms":elapsed,"simulation_latency_us":sum(simulation_latency_us),"simulation_steps_per_second":result.steps/(sum(simulation_latency_us)/1_000_000) if simulation_latency_us and sum(simulation_latency_us)>0 else None}
         return row,result.records
     with ThreadPoolExecutor(max_workers=min(concurrency,runs)) as executor:
         completed=list(executor.map(execute,range(runs)))
@@ -226,7 +233,9 @@ def benchmark_remote(runs: int, seed_start: int, output: Path, base_url: str, pr
     export_csv(decision_rows,output/"decisions.csv")
     step_latencies=[r["mean_step_latency_ms"] for r in rows if isinstance(r["mean_step_latency_ms"],(int,float))]
     control_times=[r["control_elapsed_ms"] for r in rows if isinstance(r["control_elapsed_ms"],(int,float))]
-    summary={"scenario_id":"survival_room","provider":provider_name,"runs":runs,"seed_start":seed_start,"concurrency":concurrency,"success_rate":sum(r["outcome"]=="escaped" for r in rows)/runs,"mean_score":sum(r["score"] for r in rows)/runs,"mean_steps":sum(r["steps"] for r in rows)/runs,"mean_step_latency_ms":sum(step_latencies)/len(step_latencies) if step_latencies else None,"mean_control_elapsed_ms":sum(control_times)/len(control_times) if control_times else None,"engine_version":"rust-v1","base_url":base_url,"seed_results":[{"seed":r["seed"],"outcome":r["outcome"],"score":r["score"],"steps":r["steps"]} for r in rows]}
+    simulation_times=[r["simulation_latency_us"] for r in rows if isinstance(r["simulation_latency_us"],(int,float))]
+    total_simulation_us=sum(simulation_times)
+    summary={"scenario_id":"survival_room","provider":provider_name,"runs":runs,"seed_start":seed_start,"concurrency":concurrency,"success_rate":sum(r["outcome"]=="escaped" for r in rows)/runs,"mean_score":sum(r["score"] for r in rows)/runs,"mean_steps":sum(r["steps"] for r in rows)/runs,"mean_step_latency_ms":sum(step_latencies)/len(step_latencies) if step_latencies else None,"mean_control_elapsed_ms":sum(control_times)/len(control_times) if control_times else None,"simulation_steps_per_second":sum(r["steps"] for r in rows)/(total_simulation_us/1_000_000) if total_simulation_us>0 else None,"engine_version":"rust-v1","base_url":base_url,"seed_results":[{"seed":r["seed"],"outcome":r["outcome"],"score":r["score"],"steps":r["steps"],"simulation_latency_us":r["simulation_latency_us"]} for r in rows]}
     (output/"benchmark_summary.json").write_text(json.dumps(summary,indent=2)); return summary
 
 def compare_benchmarks(left: dict, right: dict) -> dict:

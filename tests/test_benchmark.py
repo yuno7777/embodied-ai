@@ -37,9 +37,15 @@ def test_bounded_concurrent_benchmark_is_seed_ordered_and_writes_csv(monkeypatch
         record={"run_id":f"run-{seed}","scenario_id":"survival_room","scenario_version":3,"seed":seed,"step":1,"provider":provider.name,"model":None,"chosen_action":{"type":"wait"},"decision_summary":"test","action_valid":True,"latency_ms":0,"token_usage":None,"events":[{"type":"ActionCompleted","message":"wait"}],"observation":{},"agent_context":{},"metrics":{"normalized_score":90+seed%2}}
         return RemoteRunResult(f"run-{seed}", "escaped", seed % 3 + 1, [record])
     monkeypatch.setattr(benchmark,"run_remote",fake_run)
+    class ReplayClient:
+        def __init__(self, _base_url): pass
+        def replay(self, _run_id): return {"control": {"simulation_latency_us": [100, 300]}}
+        def close(self): pass
+    monkeypatch.setattr(benchmark, "RustRunClient", ReplayClient)
     report=benchmark.benchmark_remote(4,10,tmp_path,"http://sim","scripted",concurrency=2)
     assert report["concurrency"]==2
     assert [row["seed"] for row in report["seed_results"]]==[10,11,12,13]
+    assert report["simulation_steps_per_second"] == 5000.0
     assert (tmp_path/"runs.csv").exists() and (tmp_path/"decisions.csv").exists()
 
 def test_benchmark_comparison_reports_directional_deltas():

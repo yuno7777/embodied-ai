@@ -35,6 +35,7 @@ class RustRunClient:
     def snapshot(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}").raise_for_status().json()
     def status(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/status").raise_for_status().json()
     def observation(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/observation").raise_for_status().json()
+    def replay(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/replay").raise_for_status().json()
     def restore(self, replay_id: str) -> dict: return self.client.post(f"/api/replays/{replay_id}/resume").raise_for_status().json()
     def record_decision(self, run_id: str, action: ActionRequest, decision_summary: str, provider: str, model: str | None, latency_ms: int, token_usage: dict | None) -> dict:
         return self.client.post(f"/api/runs/{run_id}/decision", json={"action": action.model_dump(exclude_none=True), "decision_summary": decision_summary, "provider": provider, "model": model, "latency_ms": max(0, round(latency_ms)), "token_usage": token_usage}).raise_for_status().json()
