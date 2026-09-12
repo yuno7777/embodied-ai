@@ -59,6 +59,20 @@ def test_authoritative_run_creation_sends_an_optional_max_step_override():
     assert calls == [("/api/runs", {"seed": 42, "max_steps": 7, "observation_mode": "rich"})]
 
 
+def test_authoritative_run_creation_can_select_a_catalog_scenario():
+    calls = []
+    class Response:
+        def raise_for_status(self): return self
+        def json(self): return {"run_id": "test"}
+    class Client:
+        def post(self, path, json):
+            calls.append((path, json)); return Response()
+    client = object.__new__(RustRunClient)
+    client.client = Client()
+    client.create(42, scenario_id="generated_room")
+    assert calls == [("/api/runs", {"seed": 42, "scenario_id": "generated_room", "observation_mode": "normal"})]
+
+
 @pytest.mark.parametrize("failure", [RuntimeError("ProviderUnavailable"), ValueError("Malformed provider response")])
 def test_provider_failure_marks_the_authoritative_run_as_provider_error(monkeypatch, failure):
     calls = []
