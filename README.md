@@ -67,6 +67,20 @@ The helper configures the local Windows Rust toolchain. It is the only simulatio
 
 ## Run policies and benchmarks
 
+Generate a deterministic symbolic world without starting an episode:
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8080/api/worlds/generate -ContentType application/json -Body '{"seed":42}'
+```
+
+Start an authoritative episode directly from that generator family:
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8080/api/runs -ContentType application/json -Body '{"generated_world":{"seed":42}}'
+```
+
+The response contains an immutable `world_manifest` with generator version, seed, hash, generation attempt, dimensions, scenario definition, and solvability validation. Default train, validation, and test seed partitions are disjoint; evaluation must use held-out partition seeds.
+
 ```powershell
 python -m embodied_ai.cli run --scenario survival_room --provider scripted --seed 42 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli benchmark --scenario survival_room --provider scripted --runs 20 --seed-start 1000 --server-url http://127.0.0.1:8080
