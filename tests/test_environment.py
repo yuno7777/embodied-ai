@@ -9,8 +9,8 @@ class FakeClient:
         self.created = []
         self.closed = False
 
-    def create(self, seed, max_steps, observation_mode, scenario_id):
-        self.created.append((seed, max_steps, observation_mode, scenario_id))
+    def create(self, seed, max_steps, observation_mode, scenario_id, generated_world=None):
+        self.created.append((seed, max_steps, observation_mode, scenario_id, generated_world))
         return {"run_id": "episode-1", "observation": {"visible_cells": [], "allowed_action_types": ["wait"]}}
 
     def step(self, run_id, action):
@@ -31,7 +31,7 @@ def test_headless_environment_uses_only_rust_client(monkeypatch):
     env = EmbodiedEnv(EmbodiedEnvConfig(scenario_id="generated_grid", observation_mode="minimal", max_steps=9))
     observation, info = env.reset(seed=123)
     assert observation["allowed_action_types"] == ["wait"]
-    assert info == {"run_id": "episode-1", "scenario_id": "generated_grid", "seed": 123, "observation_mode": "minimal"}
+    assert info == {"run_id": "episode-1", "scenario_id": "generated_grid", "world_manifest": None, "seed": 123, "observation_mode": "minimal"}
     next_observation, reward, terminated, truncated, step_info = env.step({"type": "wait"})
     assert next_observation == {"visible_cells": []}
     assert (reward, terminated, truncated) == (3.0, True, False)
@@ -44,3 +44,12 @@ def test_headless_environment_requires_reset(monkeypatch):
     monkeypatch.setattr(environment, "RustRunClient", FakeClient)
     with pytest.raises(RuntimeError, match="reset"):
         EmbodiedEnv().step({"type": "wait"})
+
+
+def test_headless_environment_can_request_a_generated_world(monkeypatch):
+    monkeypatch.setattr(environment, "RustRunClient", FakeClient)
+    world = {"seed": 321}
+    env = EmbodiedEnv(EmbodiedEnvConfig(generated_world=world))
+    _, info = env.reset(seed=123)
+    assert env._client.created == [(123, None, "normal", None, world)]
+    assert info["scenario_id"] is None

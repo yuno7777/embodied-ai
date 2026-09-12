@@ -73,6 +73,27 @@ def test_authoritative_run_creation_can_select_a_catalog_scenario():
     assert calls == [("/api/runs", {"seed": 42, "scenario_id": "generated_room", "observation_mode": "normal"})]
 
 
+def test_authoritative_run_creation_can_request_a_generated_world():
+    calls = []
+    class Response:
+        def raise_for_status(self): return self
+        def json(self): return {"run_id": "test"}
+    class Client:
+        def post(self, path, json):
+            calls.append((path, json)); return Response()
+    client = object.__new__(RustRunClient)
+    client.client = Client()
+    world = {"seed": 99, "config": {"min_width": 9, "max_width": 9}}
+    client.create(42, generated_world=world)
+    assert calls == [("/api/runs", {"seed": 42, "generated_world": world, "observation_mode": "normal"})]
+
+
+def test_authoritative_run_creation_rejects_ambiguous_world_source():
+    client = object.__new__(RustRunClient)
+    with pytest.raises(ValueError, match="either"):
+        client.create(42, scenario_id="survival_room", generated_world={"seed": 99})
+
+
 @pytest.mark.parametrize("failure", [RuntimeError("ProviderUnavailable"), ValueError("Malformed provider response")])
 def test_provider_failure_marks_the_authoritative_run_as_provider_error(monkeypatch, failure):
     calls = []
