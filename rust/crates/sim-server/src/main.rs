@@ -11,6 +11,7 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sim_core::{
     Action, Environment, Event, Observation, ObservationMode, Scenario, StepResult, WorldSnapshot,
+    generator::{WorldGenerator, WorldGeneratorConfig, WorldManifest},
 };
 use std::{
     collections::HashMap,
@@ -171,6 +172,13 @@ struct CreateRun {
     observation_mode: Option<ObservationMode>,
     #[serde(default)]
     controller: Controller,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GenerateWorld {
+    seed: u64,
+    #[serde(default)]
+    config: WorldGeneratorConfig,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -397,6 +405,16 @@ async fn scenario_by_id(Path(id): Path<String>) -> Result<Json<Scenario>, Status
         .find(|configured| configured.id == id)
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
+}
+async fn generate_world(
+    Json(request): Json<GenerateWorld>,
+) -> Result<Json<WorldManifest>, (StatusCode, String)> {
+    let generator = WorldGenerator::new(request.config)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+    generator
+        .generate(request.seed)
+        .map(Json)
+        .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))
 }
 async fn create(
     State(state): State<AppState>,
@@ -1004,6 +1022,7 @@ fn app(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/api/scenarios", get(scenarios))
         .route("/api/scenarios/{id}", get(scenario_by_id))
+        .route("/api/worlds/generate", post(generate_world))
         .route("/api/runs", get(runs).post(create))
         .route("/api/runs/{id}", get(snapshot))
         .route("/api/runs/{id}/status", get(run_status))
@@ -1542,6 +1561,31 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(unknown_selection.status(), StatusCode::BAD_REQUEST);
+
+        let generated = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/worlds/generate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"seed":42}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(generated.status(), StatusCode::OK);
+        let generated_body = axum::body::to_bytes(generated.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let generated_json = serde_json::from_slice::<serde_json::Value>(&generated_body).unwrap();
+        assert!(generated_json["validation"]["solvable"].as_bool().unwrap());
+        assert!(
+            generated_json["world_hash"]
+                .as_str()
+                .unwrap()
+                .starts_with("fnv1a64:")
+        );
 
         let benchmark = app
             .oneshot(
