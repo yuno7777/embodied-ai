@@ -609,6 +609,25 @@ pub struct RewardBreakdown {
     pub hazard_penalty: i32,
     pub terminal: i32,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RewardConfig {
+    pub baseline_per_step: i32,
+    pub discovery_bonus: i32,
+    pub invalid_action_penalty: i32,
+    pub terminal_success: i32,
+    pub terminal_failure: i32,
+}
+impl Default for RewardConfig {
+    fn default() -> Self {
+        Self {
+            baseline_per_step: -1,
+            discovery_bonus: 5,
+            invalid_action_penalty: -2,
+            terminal_success: 100,
+            terminal_failure: -100,
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorldSnapshot {
     pub run_id: Uuid,
@@ -643,6 +662,7 @@ pub struct Environment {
     pub done: bool,
     pub terminal_reason: Option<String>,
     pub events: Vec<Event>,
+    pub reward_config: RewardConfig,
     rng: StdRng,
     visited: BTreeSet<Pos>,
     invalid: u32,
@@ -661,12 +681,25 @@ pub struct Environment {
 }
 impl Environment {
     pub fn new(scenario: Scenario, seed: u64) -> Result<Self, SimError> {
-        Self::new_with_observation_mode(scenario, seed, ObservationMode::Normal)
+        Self::new_with_reward_config(
+            scenario,
+            seed,
+            ObservationMode::Normal,
+            RewardConfig::default(),
+        )
     }
     pub fn new_with_observation_mode(
         scenario: Scenario,
         seed: u64,
         observation_mode: ObservationMode,
+    ) -> Result<Self, SimError> {
+        Self::new_with_reward_config(scenario, seed, observation_mode, RewardConfig::default())
+    }
+    pub fn new_with_reward_config(
+        scenario: Scenario,
+        seed: u64,
+        observation_mode: ObservationMode,
+        reward_config: RewardConfig,
     ) -> Result<Self, SimError> {
         scenario.validate()?;
         let spawn = scenario.spawn;
@@ -697,6 +730,7 @@ impl Environment {
             done: false,
             terminal_reason: None,
             events: vec![],
+            reward_config,
             rng: StdRng::seed_from_u64(seed),
             visited,
             invalid: 0,
@@ -1497,19 +1531,20 @@ impl Environment {
         }
         self.record_visible_discoveries(&mut out);
         let reward_breakdown = RewardBreakdown {
-            baseline: -1,
+            baseline: self.reward_config.baseline_per_step,
             progress: self
                 .rewarded_progress
                 .iter()
                 .filter(|key| self.milestones.get(*key) == Some(&self.step))
                 .count() as i32
-                * 5,
-            invalid_action_penalty: -((self.invalid - invalid_before) as i32 * 2),
+                * self.reward_config.discovery_bonus,
+            invalid_action_penalty: (self.invalid - invalid_before) as i32
+                * self.reward_config.invalid_action_penalty,
             hazard_penalty: -(self.hazard_damage - hazard_damage_before),
             terminal: if self.terminal_reason.as_deref() == Some("escaped") {
-                100
+                self.reward_config.terminal_success
             } else if self.done {
-                -100
+                self.reward_config.terminal_failure
             } else {
                 0
             },
@@ -2310,6 +2345,26 @@ mod tests {
         assert_eq!(rest.simulation_time, 3);
         assert_eq!(rest.metrics.simulated_time, 3);
         assert_eq!(env.snapshot().simulation_time, 3);
+    }
+    #[test]
+    fn reward_configuration_changes_evaluation_without_changing_transition_rules() {
+        let config = RewardConfig {
+            baseline_per_step: 2,
+            discovery_bonus: 0,
+            invalid_action_penalty: -7,
+            terminal_success: 50,
+            terminal_failure: -25,
+        };
+        let mut environment =
+            Environment::new_with_reward_config(s(), 22, ObservationMode::Normal, config).unwrap();
+        let valid = environment.step(Action::Wait);
+        assert_eq!(valid.reward_breakdown.baseline, 2);
+        assert_eq!(valid.reward, 2);
+        let invalid = environment.step(Action::Move {
+            direction: Direction::West,
+        });
+        assert_eq!(invalid.reward_breakdown.invalid_action_penalty, -7);
+        assert_eq!(invalid.reward, -5);
     }
     #[test]
     fn inspect_never_confirms_a_hidden_target() {
