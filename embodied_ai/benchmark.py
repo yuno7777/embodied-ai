@@ -7,6 +7,7 @@ from pathlib import Path
 from statistics import fmean
 from typing import Any, Mapping
 from .datasets import export_csv, export_jsonl, export_parquet
+from .experiments import ExperimentManifest
 from .providers import CautiousProvider, ExplorerProvider, GeminiProvider, MockReasoningProvider, RandomValidProvider, ScriptedProvider
 from .runner import run_remote
 
@@ -122,6 +123,19 @@ def evaluate_generalization_remote(
     if concurrency < 1 or concurrency > 32:
         raise ValueError("concurrency must be between 1 and 32")
     output.mkdir(parents=True, exist_ok=True)
+    manifest = ExperimentManifest(
+        scenario_id="procedural",
+        seed=plan.train.seeds[0],
+        provider=provider_name,
+        observation_mode="normal",
+        memory_mode="none",
+        memory_window=1,
+        generator_version=1,
+        generated_world={"config": dict(generator_config)} if generator_config is not None else {},
+        world_distribution={name: tuple(seeds) for name, seeds in plan.as_dict().items()},
+        agent_config={"policy": provider_name},
+    )
+    manifest_path = manifest.persist(output)
     jobs = [(partition.name, seed) for partition in (plan.train, plan.validation, plan.test) for seed in partition.seeds]
 
     def execute(job: tuple[str, int]) -> dict[str, Any]:
@@ -149,6 +163,9 @@ def evaluate_generalization_remote(
         rows = list(executor.map(execute, jobs))
     rows.sort(key=lambda row: (row["partition"], row["seed"]))
     report = summarize_generalization(rows) | {
+        "experiment_id": manifest.experiment_id,
+        "experiment_manifest": manifest_path.name,
+        "experiment_fingerprint": manifest.fingerprint(),
         "provider": provider_name,
         "engine_version": "rust-v1",
         "world_distribution": plan.as_dict(),

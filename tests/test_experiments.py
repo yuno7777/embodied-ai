@@ -16,3 +16,28 @@ def test_manifest_persists_reconstructible_metadata(tmp_path):
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert saved["experiment_id"] == "experiment"
     assert saved["fingerprint"] == manifest.fingerprint()
+
+
+def test_manifest_captures_a_procedural_evaluation_distribution():
+    manifest = ExperimentManifest(
+        scenario_id="procedural", seed=0, provider="scripted", observation_mode="normal",
+        memory_mode="none", memory_window=1, generator_version=1,
+        generated_world={"seed": 0, "config": {"min_width": 9}},
+        world_distribution={"train": (0, 1), "validation": (2,), "test": (3,)},
+        reward_config={"baseline_per_step": -1}, agent_config={"policy": "scripted"},
+    )
+    assert manifest.manifest_version == 2
+    assert manifest.world_distribution["test"] == (3,)
+
+
+def test_manifest_rejects_overlapping_evaluation_distribution():
+    try:
+        ExperimentManifest(
+            scenario_id="procedural", seed=0, provider="scripted", observation_mode="normal",
+            memory_mode="none", memory_window=1,
+            world_distribution={"train": (0,), "validation": (0,), "test": (2,)},
+        )
+    except ValueError as error:
+        assert "disjoint" in str(error)
+    else:
+        raise AssertionError("overlapping partitions were accepted")

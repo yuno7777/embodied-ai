@@ -8,12 +8,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .paths import ROOT
 
 
-EXPERIMENT_MANIFEST_VERSION = 1
+EXPERIMENT_MANIFEST_VERSION = 2
 
 
 def source_revision() -> str | None:
@@ -34,6 +34,7 @@ class ExperimentManifest(BaseModel):
     experiment_id: str = Field(default_factory=lambda: str(uuid4()))
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     engine_version: str = "rust-v1"
+    action_mode: str = "typed_action_v1"
     source_revision: str | None = Field(default_factory=source_revision)
     scenario_id: str
     scenario_version: int | None = None
@@ -46,6 +47,24 @@ class ExperimentManifest(BaseModel):
     max_steps: int | None = Field(default=None, ge=1)
     max_wall_seconds: float | None = Field(default=None, gt=0)
     max_total_tokens: int | None = Field(default=None, ge=1)
+    generator_version: int | None = Field(default=None, ge=1)
+    generated_world: dict[str, object] | None = None
+    world_distribution: dict[str, tuple[int, ...]] | None = None
+    reward_config: dict[str, int] | None = None
+    dataset_version: str | None = None
+    agent_config: dict[str, object] | None = None
+
+    @model_validator(mode="after")
+    def validate_world_distribution(self) -> "ExperimentManifest":
+        if self.world_distribution is None:
+            return self
+        expected = {"train", "validation", "test"}
+        if set(self.world_distribution) != expected:
+            raise ValueError("world_distribution must contain train, validation, and test")
+        seeds = [seed for partition in self.world_distribution.values() for seed in partition]
+        if not seeds or any(seed < 0 for seed in seeds) or len(set(seeds)) != len(seeds):
+            raise ValueError("world_distribution seeds must be non-negative and disjoint")
+        return self
 
     def fingerprint(self) -> str:
         payload = self.model_dump(mode="json", exclude={"created_at", "experiment_id"})

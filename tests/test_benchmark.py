@@ -1,3 +1,5 @@
+import json
+
 import embodied_ai.benchmark as benchmark
 from embodied_ai.providers import CautiousProvider, ExplorerProvider, MockReasoningProvider, RandomValidProvider, ScriptedProvider
 from embodied_ai.runner import RemoteRunResult
@@ -94,3 +96,6 @@ def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monk
     assert report["generalization_gap"]["train_minus_test_success_rate"] == 1.0
     assert (tmp_path / "generalization_report.json").exists()
     assert (tmp_path / "generalization_episodes.jsonl").exists()
+    manifest = tmp_path / report["experiment_manifest"]
+    assert manifest.exists()
+    assert json.loads(manifest.read_text())["world_distribution"] == report["world_distribution"]
