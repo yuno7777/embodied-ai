@@ -12,7 +12,12 @@ use serde::{Deserialize, Serialize};
 use sim_core::{
     Action, Environment, Event, Observation, ObservationMode, Scenario, StepResult, WorldSnapshot,
 };
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    path::{Path as FsPath, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
 use tokio::sync::{Mutex, broadcast};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use uuid::Uuid;
@@ -160,6 +165,7 @@ impl Default for AppState {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateRun {
+    scenario_id: Option<String>,
     seed: Option<u64>,
     max_steps: Option<u32>,
     observation_mode: Option<ObservationMode>,
@@ -286,11 +292,48 @@ fn replay_for(
     }
 }
 
-fn scenario() -> Scenario {
+fn bundled_scenario() -> Scenario {
     serde_json::from_str(include_str!(
         "../../../../scenarios/survival_room/scenario.rust.json"
     ))
     .expect("bundled scenario is valid")
+}
+fn scenario_directory() -> PathBuf {
+    std::env::var_os("SIM_SCENARIO_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("../scenarios"))
+}
+fn scenario_catalog_from(root: &FsPath) -> Result<Vec<Scenario>, String> {
+    let entries = std::fs::read_dir(root).map_err(|error| error.to_string())?;
+    let mut scenarios = entries
+        .flatten()
+        .filter_map(|entry| {
+            entry
+                .file_type()
+                .ok()
+                .filter(|kind| kind.is_dir())
+                .map(|_| entry.path())
+        })
+        .filter_map(|directory| std::fs::read(directory.join("scenario.rust.json")).ok())
+        .map(|raw| serde_json::from_slice::<Scenario>(&raw).map_err(|error| error.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    for configured in &scenarios {
+        configured.validate().map_err(|error| error.to_string())?;
+    }
+    scenarios.sort_by(|left, right| left.id.cmp(&right.id));
+    if scenarios.is_empty() {
+        return Err("scenario catalog is empty".into());
+    }
+    Ok(scenarios)
+}
+fn scenario_catalog() -> Vec<Scenario> {
+    scenario_catalog_from(&scenario_directory()).unwrap_or_else(|_| vec![bundled_scenario()])
+}
+fn scenario() -> Scenario {
+    scenario_catalog()
+        .into_iter()
+        .find(|configured| configured.id == "survival_room")
+        .unwrap_or_else(bundled_scenario)
 }
 fn persist(
     env: &Environment,
@@ -346,12 +389,13 @@ async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status":"ok","protocol_version":1,"engine":"rust"}))
 }
 async fn scenarios() -> Json<Vec<Scenario>> {
-    Json(vec![scenario()])
+    Json(scenario_catalog())
 }
 async fn scenario_by_id(Path(id): Path<String>) -> Result<Json<Scenario>, StatusCode> {
-    let configured = scenario();
-    (configured.id == id)
-        .then_some(Json(configured))
+    scenario_catalog()
+        .into_iter()
+        .find(|configured| configured.id == id)
+        .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
 }
 async fn create(
@@ -359,12 +403,19 @@ async fn create(
     body: Option<Json<CreateRun>>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, String)> {
     let request = body.map(|body| body.0).unwrap_or(CreateRun {
+        scenario_id: None,
         seed: None,
         max_steps: None,
         observation_mode: None,
         controller: Controller::Provider,
     });
-    let mut configured_scenario = scenario();
+    let mut configured_scenario = match request.scenario_id.as_deref() {
+        Some(id) => scenario_catalog()
+            .into_iter()
+            .find(|configured| configured.id == id)
+            .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("unknown scenario: {id}")))?,
+        None => scenario(),
+    };
     if let Some(max_steps) = request.max_steps {
         configured_scenario.max_steps = max_steps;
     }
@@ -1411,6 +1462,28 @@ mod tests {
     #[tokio::test]
     async fn scenario_lookup_and_benchmark_summary_are_available() {
         let app = app(AppState::default());
+        let catalog = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/scenarios")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(catalog.status(), StatusCode::OK);
+        let catalog_body = axum::body::to_bytes(catalog.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert!(
+            serde_json::from_slice::<serde_json::Value>(&catalog_body)
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|scenario| scenario["id"] == "survival_room")
+        );
         let known = app
             .clone()
             .oneshot(
@@ -1441,6 +1514,34 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+
+        let selected = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/runs")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"scenario_id":"survival_room","seed":7}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(selected.status(), StatusCode::CREATED);
+
+        let unknown_selection = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/runs")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"scenario_id":"missing"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unknown_selection.status(), StatusCode::BAD_REQUEST);
 
         let benchmark = app
             .oneshot(
