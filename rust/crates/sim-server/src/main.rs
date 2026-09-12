@@ -83,6 +83,9 @@ impl<'de> serde::Deserialize<'de> for StrictAction {
 
 struct RunRecord {
     env: Environment,
+    /// The exact generated input world, when this run did not come from the catalog.
+    /// Keeping it alongside live state makes a replay self-contained.
+    world_manifest: Option<WorldManifest>,
     paused: bool,
     history: Vec<WorldSnapshot>,
     observations: Vec<Observation>,
@@ -244,6 +247,9 @@ struct Replay {
     observation_mode: ObservationMode,
     #[serde(default)]
     engine_version: String,
+    /// Present for procedural episodes so they can be replayed after catalog changes.
+    #[serde(default)]
+    world_manifest: Option<WorldManifest>,
     snapshot: WorldSnapshot,
     events: Vec<Event>,
     #[serde(default)]
@@ -278,6 +284,7 @@ struct BenchmarkSummary {
 
 fn replay_for(
     env: &Environment,
+    world_manifest: Option<&WorldManifest>,
     timeline: &[WorldSnapshot],
     observations: &[Observation],
     decisions: &[DecisionRecord],
@@ -291,6 +298,7 @@ fn replay_for(
         max_steps: env.scenario.max_steps,
         observation_mode: env.observation_mode,
         engine_version: "rust-v1".into(),
+        world_manifest: world_manifest.cloned(),
         snapshot: env.snapshot(),
         events: env.events.clone(),
         timeline: timeline.to_vec(),
@@ -346,6 +354,7 @@ fn scenario() -> Scenario {
 }
 fn persist(
     env: &Environment,
+    world_manifest: Option<&WorldManifest>,
     timeline: &[WorldSnapshot],
     observations: &[Observation],
     decisions: &[DecisionRecord],
@@ -364,7 +373,15 @@ fn persist(
         directory.join(format!("{}.jsonl", env.run_id)),
         format!("{records}\n"),
     );
-    let replay = replay_for(env, timeline, observations, decisions, actions, control);
+    let replay = replay_for(
+        env,
+        world_manifest,
+        timeline,
+        observations,
+        decisions,
+        actions,
+        control,
+    );
     if let Ok(encoded) = serde_json::to_vec_pretty(&replay) {
         let _ = std::fs::write(
             directory.join(format!("{}.replay.json", env.run_id)),
@@ -470,6 +487,7 @@ async fn create(
         id,
         RunRecord {
             env,
+            world_manifest: generated_manifest.clone(),
             paused: false,
             history: vec![snapshot.clone()],
             observations: vec![observation.clone()],
@@ -569,6 +587,7 @@ async fn replay(
         max_steps: r.env.scenario.max_steps,
         observation_mode: r.env.observation_mode,
         engine_version: "rust-v1".into(),
+        world_manifest: r.world_manifest.clone(),
         snapshot: r.env.snapshot(),
         events: r.env.events.clone(),
         timeline: r.history.clone(),
@@ -587,13 +606,34 @@ async fn restore_replay(
     State(state): State<AppState>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, String)> {
     let saved = saved_replay(id).ok_or((StatusCode::NOT_FOUND, "replay not found".into()))?;
-    let mut configured = scenario();
-    if saved.scenario_id != configured.id || saved.scenario_version != configured.version {
-        return Err((
-            StatusCode::CONFLICT,
-            "replay scenario version does not match the loaded scenario".into(),
-        ));
-    }
+    let generated_manifest = saved.world_manifest.clone();
+    let mut configured = match generated_manifest.as_ref() {
+        Some(manifest) => {
+            manifest
+                .scenario
+                .validate()
+                .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))?;
+            if saved.scenario_id != manifest.scenario.id
+                || saved.scenario_version != manifest.scenario.version
+            {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "replay metadata does not match its generated world manifest".into(),
+                ));
+            }
+            manifest.scenario.clone()
+        }
+        None => {
+            let configured = scenario();
+            if saved.scenario_id != configured.id || saved.scenario_version != configured.version {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "replay scenario version does not match the loaded scenario".into(),
+                ));
+            }
+            configured
+        }
+    };
     if saved.snapshot.done {
         return Err((
             StatusCode::CONFLICT,
@@ -648,6 +688,7 @@ async fn restore_replay(
     let observation = env.observe();
     let record = RunRecord {
         env,
+        world_manifest: generated_manifest,
         paused: false,
         history,
         observations,
@@ -797,6 +838,7 @@ async fn abort(
     run.observations.push(run.env.observe());
     persist(
         &run.env,
+        run.world_manifest.as_ref(),
         &run.history,
         &run.observations,
         &run.decisions,
@@ -828,6 +870,7 @@ async fn provider_error(
     run.observations.push(run.env.observe());
     persist(
         &run.env,
+        run.world_manifest.as_ref(),
         &run.history,
         &run.observations,
         &run.decisions,
@@ -867,6 +910,7 @@ async fn stop_run(
     run.observations.push(run.env.observe());
     persist(
         &run.env,
+        run.world_manifest.as_ref(),
         &run.history,
         &run.observations,
         &run.decisions,
@@ -920,6 +964,7 @@ async fn record_decision(
     run.decisions.push(decision.clone());
     persist(
         &run.env,
+        run.world_manifest.as_ref(),
         &run.history,
         &run.observations,
         &run.decisions,
@@ -959,6 +1004,7 @@ async fn step(
     run.observations.push(result.observation.clone());
     persist(
         &run.env,
+        run.world_manifest.as_ref(),
         &run.history,
         &run.observations,
         &run.decisions,
@@ -996,6 +1042,7 @@ async fn manual_step(
     run.observations.push(result.observation.clone());
     persist(
         &run.env,
+        run.world_manifest.as_ref(),
         &run.history,
         &run.observations,
         &run.decisions,
@@ -1988,7 +2035,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn persisted_active_replay_can_reconstruct_a_new_authoritative_run() {
+    async fn generated_world_replay_can_reconstruct_without_catalog_state() {
         let app = app(AppState::default());
         let created = app
             .clone()
@@ -1997,7 +2044,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/runs")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"seed":987}"#))
+                    .body(Body::from(r#"{"seed":987,"generated_world":{"seed":654}}"#))
                     .unwrap(),
             )
             .await
@@ -2005,10 +2052,9 @@ mod tests {
         let body = axum::body::to_bytes(created.into_body(), usize::MAX)
             .await
             .unwrap();
-        let run_id = serde_json::from_slice::<serde_json::Value>(&body).unwrap()["run_id"]
-            .as_str()
-            .unwrap()
-            .to_owned();
+        let created_json = serde_json::from_slice::<serde_json::Value>(&body).unwrap();
+        assert_eq!(created_json["world_manifest"]["seed"], 654);
+        let run_id = created_json["run_id"].as_str().unwrap().to_owned();
         app.clone()
             .oneshot(
                 Request::builder()
