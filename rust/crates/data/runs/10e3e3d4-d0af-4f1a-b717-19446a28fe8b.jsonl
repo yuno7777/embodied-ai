@@ -1,2 +1,0 @@
-{"event_id":"3fdc057b-72a4-4899-84cf-c48d7360e3a2","run_id":"10e3e3d4-d0af-4f1a-b717-19446a28fe8b","step":1,"simulation_time":1,"timestamp":"2026-09-10T21:15:38.219050500Z","type":"ActionCompleted","message":"You wait briefly."}
-{"event_id":"daaee15a-2eb0-4c99-bbc6-77630728cdba","run_id":"10e3e3d4-d0af-4f1a-b717-19446a28fe8b","step":1,"simulation_time":1,"timestamp":"2026-09-10T21:15:38.219076500Z","type":"RunTimedOut","message":"Maximum steps reached."}
