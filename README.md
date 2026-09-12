@@ -84,12 +84,15 @@ The response contains an immutable `world_manifest` with generator version, seed
 ```powershell
 python -m embodied_ai.cli run --scenario survival_room --provider scripted --seed 42 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli benchmark --scenario survival_room --provider scripted --runs 20 --seed-start 1000 --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli generalize --provider scripted --train-start 0 --train-count 20 --validation-start 1000 --validation-count 10 --test-start 2000 --test-count 10 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider gemini --max-wall-seconds 300 --max-total-tokens 20000 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider cautious --resume-run-id YOUR_LIVE_RUN_ID --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider cautious --restore-replay-id YOUR_PERSISTED_REPLAY_ID --server-url http://127.0.0.1:8080
 ```
 
 Start the Rust server before either command. Rust events are persisted as replayable JSONL plus a structured replay record (including initial and per-step researcher snapshots and the exact filtered observations supplied to the agent) under `data/runs/`; the observer library loads those saved replays after a server restart and supports step/playback controls. The Python run and benchmark commands also export step-level Rust observations, decisions, events and metrics as JSONL/Parquet.
+
+`generalize` creates only procedural worlds, keeps its three seed sets disjoint, and writes `generalization_report.json` plus per-episode JSONL. Its report includes each split's success rate with a Wilson 95% interval, reward, episode length, invalid-action rate, exploration/resource metrics, failure reasons, steps/sec, and train-to-held-out gaps. It evaluates policies; it does not train them.
 
 `scripted`, `mock_reasoning`, and `random_valid` require no API key. The Gemini adapter uses the official `google-genai` SDK, structured JSON output, timeouts and post-response Pydantic validation; it is intentionally opt-in.
 

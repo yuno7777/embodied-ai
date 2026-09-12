@@ -48,3 +48,49 @@ def test_benchmark_comparison_reports_directional_deltas():
     assert result["success_rate_delta"]==0.5
     assert result["mean_score_delta"]==30
     assert result["mean_steps_delta"]==-2
+
+
+def test_generalization_plan_rejects_overlapping_seed_sets():
+    train = benchmark.SeedPartition.from_range("train", 0, 2)
+    validation = benchmark.SeedPartition.from_range("validation", 2, 3)
+    test = benchmark.SeedPartition.from_range("test", 3, 4)
+    plan = benchmark.GeneralizationPlan(train, validation, test)
+    assert plan.as_dict() == {"train": [0, 1], "validation": [2], "test": [3]}
+    try:
+        benchmark.GeneralizationPlan(train, benchmark.SeedPartition.from_range("validation", 1, 3), test)
+    except ValueError as error:
+        assert "disjoint" in str(error)
+    else:
+        raise AssertionError("overlapping held-out partitions were accepted")
+
+
+def test_generalization_summary_reports_held_out_gap_and_uncertainty():
+    rows = [
+        {"partition": "train", "outcome": "escaped", "steps": 2, "total_reward": 5, "invalid_actions": 0, "exploration_coverage": .7, "resource_efficiency": .9, "control_elapsed_ms": 10},
+        {"partition": "validation", "outcome": "hazard", "steps": 4, "total_reward": -2, "invalid_actions": 1, "exploration_coverage": .4, "resource_efficiency": .2, "control_elapsed_ms": 20},
+        {"partition": "test", "outcome": "hazard", "steps": 3, "total_reward": -3, "invalid_actions": 1, "exploration_coverage": .3, "resource_efficiency": .1, "control_elapsed_ms": 15},
+    ]
+    report = benchmark.summarize_generalization(rows)
+    assert report["partitions"]["train"]["success_rate"] == 1.0
+    assert report["partitions"]["test"]["success_rate"] == 0.0
+    assert report["generalization_gap"]["train_minus_test_success_rate"] == 1.0
+    assert len(report["partitions"]["test"]["success_rate_wilson_95"]) == 2
+    assert report["partitions"]["validation"]["failure_reasons"] == {"hazard": 1}
+
+
+def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):
+    def fake_run(provider, seed, _base_url, **kwargs):
+        assert kwargs["generated_world"] == {"seed": seed, "config": {"min_width": 9, "max_width": 9}}
+        record = {"reward": 4, "metrics": {"invalid_actions": 0, "exploration_coverage": .5, "resource_efficiency": .8}, "control_elapsed_ms": 10}
+        return RemoteRunResult(f"run-{seed}", "escaped" if seed == 1 else "timeout", 2, [record])
+    monkeypatch.setattr(benchmark, "run_remote", fake_run)
+    plan = benchmark.GeneralizationPlan(
+        benchmark.SeedPartition("train", (1,)),
+        benchmark.SeedPartition("validation", (2,)),
+        benchmark.SeedPartition("test", (3,)),
+    )
+    report = benchmark.evaluate_generalization_remote(plan, tmp_path, "http://sim", generator_config={"min_width": 9, "max_width": 9})
+    assert report["world_distribution"] == {"train": [1], "validation": [2], "test": [3]}
+    assert report["generalization_gap"]["train_minus_test_success_rate"] == 1.0
+    assert (tmp_path / "generalization_report.json").exists()
+    assert (tmp_path / "generalization_episodes.jsonl").exists()

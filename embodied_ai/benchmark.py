@@ -1,10 +1,163 @@
 from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
+from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
+from statistics import fmean
+from typing import Any, Mapping
 from .datasets import export_csv, export_jsonl, export_parquet
 from .providers import CautiousProvider, ExplorerProvider, GeminiProvider, MockReasoningProvider, RandomValidProvider, ScriptedProvider
 from .runner import run_remote
+
+
+@dataclass(frozen=True)
+class SeedPartition:
+    """Named, explicit world seeds used by one evaluation split."""
+
+    name: str
+    seeds: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.name.replace("_", "").isalnum():
+            raise ValueError("partition name must be non-empty alphanumeric text")
+        if not self.seeds or any(not isinstance(seed, int) or seed < 0 for seed in self.seeds):
+            raise ValueError("partitions require one or more non-negative integer seeds")
+        if len(set(self.seeds)) != len(self.seeds):
+            raise ValueError("partition seeds must be unique")
+
+    @classmethod
+    def from_range(cls, name: str, start: int, stop: int) -> "SeedPartition":
+        """Create an explicit partition from a half-open deterministic seed range."""
+        return cls(name=name, seeds=tuple(range(start, stop)))
+
+
+@dataclass(frozen=True)
+class GeneralizationPlan:
+    """Disjoint seed splits for comparable train/validation/test evaluation."""
+
+    train: SeedPartition
+    validation: SeedPartition
+    test: SeedPartition
+
+    def __post_init__(self) -> None:
+        expected = {"train", "validation", "test"}
+        partitions = (self.train, self.validation, self.test)
+        if {partition.name for partition in partitions} != expected:
+            raise ValueError("plan partitions must be named train, validation, and test")
+        all_seeds = [seed for partition in partitions for seed in partition.seeds]
+        if len(set(all_seeds)) != len(all_seeds):
+            raise ValueError("train, validation, and test seed sets must be disjoint")
+
+    def as_dict(self) -> dict[str, list[int]]:
+        return {partition.name: list(partition.seeds) for partition in (self.train, self.validation, self.test)}
+
+
+def wilson_interval(successes: int, total: int, z: float = 1.96) -> tuple[float, float] | None:
+    """Deterministic 95% Wilson interval for a binary episode success rate."""
+    if total < 1:
+        return None
+    if not 0 <= successes <= total:
+        raise ValueError("successes must be between zero and total")
+    proportion = successes / total
+    denominator = 1 + z * z / total
+    center = (proportion + z * z / (2 * total)) / denominator
+    margin = z * ((proportion * (1 - proportion) / total + z * z / (4 * total * total)) ** 0.5) / denominator
+    return (center - margin, center + margin)
+
+
+def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize train/validation/test episodes and their held-out gap."""
+    expected = {"train", "validation", "test"}
+    grouped = {name: [row for row in rows if row.get("partition") == name] for name in expected}
+    if {row.get("partition") for row in rows} != expected or any(not group for group in grouped.values()):
+        raise ValueError("rows must contain at least one train, validation, and test episode")
+
+    def summarize(rows_for_partition: list[dict[str, Any]]) -> dict[str, Any]:
+        successes = sum(row.get("outcome") == "escaped" for row in rows_for_partition)
+        numeric = lambda key: [float(row[key]) for row in rows_for_partition if isinstance(row.get(key), (int, float))]
+        step_counts = numeric("steps")
+        rewards = numeric("total_reward")
+        invalid = numeric("invalid_actions")
+        coverage = numeric("exploration_coverage")
+        efficiency = numeric("resource_efficiency")
+        elapsed = numeric("control_elapsed_ms")
+        failure_reasons = Counter(
+            str(row.get("outcome") or "unknown") for row in rows_for_partition if row.get("outcome") != "escaped"
+        )
+        total_steps = sum(step_counts)
+        return {
+            "episodes": len(rows_for_partition),
+            "success_rate": successes / len(rows_for_partition),
+            "success_rate_wilson_95": wilson_interval(successes, len(rows_for_partition)),
+            "mean_episode_reward": fmean(rewards) if rewards else None,
+            "mean_episode_length": fmean(step_counts) if step_counts else None,
+            "invalid_action_rate": sum(invalid) / total_steps if invalid and total_steps else None,
+            "mean_exploration_coverage": fmean(coverage) if coverage else None,
+            "mean_resource_efficiency": fmean(efficiency) if efficiency else None,
+            "failure_reasons": dict(sorted(failure_reasons.items())),
+            "steps_per_second": total_steps / (sum(elapsed) / 1000) if elapsed and sum(elapsed) > 0 else None,
+        }
+
+    partitions = {name: summarize(grouped[name]) for name in sorted(expected)}
+    return {
+        "report_version": 1,
+        "partitions": partitions,
+        "generalization_gap": {
+            "train_minus_validation_success_rate": partitions["train"]["success_rate"] - partitions["validation"]["success_rate"],
+            "train_minus_test_success_rate": partitions["train"]["success_rate"] - partitions["test"]["success_rate"],
+        },
+    }
+
+
+def evaluate_generalization_remote(
+    plan: GeneralizationPlan,
+    output: Path,
+    base_url: str,
+    provider_name: str = "scripted",
+    concurrency: int = 1,
+    generator_config: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Evaluate a policy over disjoint procedural worlds and persist an exact report."""
+    if concurrency < 1 or concurrency > 32:
+        raise ValueError("concurrency must be between 1 and 32")
+    output.mkdir(parents=True, exist_ok=True)
+    jobs = [(partition.name, seed) for partition in (plan.train, plan.validation, plan.test) for seed in partition.seeds]
+
+    def execute(job: tuple[str, int]) -> dict[str, Any]:
+        partition, seed = job
+        generated_world: dict[str, Any] = {"seed": seed}
+        if generator_config is not None:
+            generated_world["config"] = dict(generator_config)
+        result = run_remote(provider_for(provider_name, seed), seed, base_url, generated_world=generated_world)
+        final = result.records[-1] if result.records else {}
+        metrics = final.get("metrics", {}) if isinstance(final.get("metrics"), dict) else {}
+        return {
+            "partition": partition,
+            "seed": seed,
+            "run_id": result.run_id,
+            "outcome": result.terminal_reason,
+            "steps": result.steps,
+            "total_reward": sum(record.get("reward", 0) for record in result.records if isinstance(record.get("reward", 0), (int, float))),
+            "invalid_actions": metrics.get("invalid_actions"),
+            "exploration_coverage": metrics.get("exploration_coverage"),
+            "resource_efficiency": metrics.get("resource_efficiency"),
+            "control_elapsed_ms": final.get("control_elapsed_ms"),
+        }
+
+    with ThreadPoolExecutor(max_workers=min(concurrency, len(jobs))) as executor:
+        rows = list(executor.map(execute, jobs))
+    rows.sort(key=lambda row: (row["partition"], row["seed"]))
+    report = summarize_generalization(rows) | {
+        "provider": provider_name,
+        "engine_version": "rust-v1",
+        "world_distribution": plan.as_dict(),
+        "generator_config": dict(generator_config) if generator_config is not None else None,
+        "episode_results": rows,
+    }
+    (output / "generalization_report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    export_jsonl(rows, output / "generalization_episodes.jsonl")
+    return report
 
 def provider_for(name: str, seed: int):
     providers = {

@@ -5,7 +5,7 @@ import pytest
 from embodied_ai import cli
 
 
-@pytest.mark.parametrize("command", ["run", "benchmark"])
+@pytest.mark.parametrize("command", ["run", "benchmark", "generalize"])
 def test_operational_cli_requires_the_rust_authority(monkeypatch, command):
     monkeypatch.setattr(sys, "argv", ["embodied-ai", command])
     with pytest.raises(SystemExit) as error:
