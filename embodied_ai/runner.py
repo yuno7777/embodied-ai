@@ -51,11 +51,16 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
         if max_wall_seconds is not None and max_wall_seconds <= 0: raise ValueError("max_wall_seconds must be positive")
         if max_total_tokens is not None and max_total_tokens <= 0: raise ValueError("max_total_tokens must be positive")
         if resume_run_id is not None and restore_replay_id is not None: raise ValueError("choose either a live run or a persisted replay to resume")
-        scenario=client.scenarios()[0]
+        scenario: dict[str, object] | None = None
         if restore_replay_id is not None:
             restored=client.restore(restore_replay_id); run_id=restored["run_id"]; observation=restored["observation"]; steps=restored["snapshot"]["step"]
         elif resume_run_id is None:
             created=client.create(seed, max_steps, observation_mode, scenario_id, generated_world, reward_config); run_id=created["run_id"]; observation=created["observation"]; steps=0
+            manifest = created.get("world_manifest")
+            if isinstance(manifest, dict) and isinstance(manifest.get("scenario"), dict):
+                scenario = manifest["scenario"]
+            else:
+                scenario = client.scenarios()[0]
         else:
             run_id=resume_run_id; status=client.status(run_id); steps=status["step"]
             if status["done"]: return RemoteRunResult(run_id,status.get("terminal_reason"),steps,[],"run was already terminal")
@@ -93,6 +98,8 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 total_tokens += decision_tokens
                 client.record_decision(run_id, action, decision_summary, provider.name, getattr(provider, "model", None), provider_latency_ms, token_usage)
                 step_started=time.perf_counter(); result=client.step(run_id,action); step_latency_ms=(time.perf_counter()-step_started)*1000; steps=result["step_number"]
+                if scenario is None:
+                    scenario = client.scenarios()[0]
                 records.append({"dataset_schema_version":1,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"observation_mode":observation_mode,"observation":observation,"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"events":result["events"],"reward":result["reward"],"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
                 records[-1]["provider_backoff_ms"] = list(getattr(provider, "last_backoff_ms", []))
                 context.record(observation,action.model_dump(exclude_none=True),result["events"]); observation=result["observation"]

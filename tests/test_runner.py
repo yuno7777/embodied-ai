@@ -109,6 +109,26 @@ def test_authoritative_run_creation_forwards_reward_configuration():
     assert calls[0][1]["reward_config"] == reward_config
 
 
+def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch):
+    class Client:
+        def __init__(self, _base_url): pass
+        def create(self, *_args):
+            return {"run_id": "r", "observation": {"allowed_action_types": ["wait"]}, "world_manifest": {"scenario": {"id": "procedural_17", "version": 1}}}
+        def scenarios(self): raise AssertionError("procedural metadata must not be replaced by catalog metadata")
+        def status(self, _run_id): return {"done": False, "paused": False, "step": 0}
+        def record_decision(self, *_args): return {}
+        def step(self, _run_id, _action):
+            return {"step_number": 1, "observation": {"allowed_action_types": ["wait"]}, "events": [], "reward": 1, "done": True, "terminal_reason": "escaped", "metrics": {}}
+        def close(self): pass
+    class Provider:
+        name = "test"
+        def choose_action(self, _observation): return ActionRequest(type="wait")
+    monkeypatch.setattr(runner, "RustRunClient", Client)
+    result = runner.run_remote(Provider(), 7, generated_world={"seed": 99})
+    assert result.records[0]["scenario_id"] == "procedural_17"
+    assert result.records[0]["scenario_version"] == 1
+
+
 @pytest.mark.parametrize("failure", [RuntimeError("ProviderUnavailable"), ValueError("Malformed provider response")])
 def test_provider_failure_marks_the_authoritative_run_as_provider_error(monkeypatch, failure):
     calls = []
