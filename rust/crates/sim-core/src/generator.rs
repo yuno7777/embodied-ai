@@ -8,6 +8,60 @@ use std::collections::{BTreeSet, VecDeque};
 pub const WORLD_GENERATOR_VERSION: u32 = 1;
 pub const WORLD_MANIFEST_VERSION: u32 = 1;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WorldPartition {
+    Train,
+    Validation,
+    Test,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorldDistribution {
+    pub train: std::ops::RangeInclusive<u64>,
+    pub validation: std::ops::RangeInclusive<u64>,
+    pub test: std::ops::RangeInclusive<u64>,
+}
+
+impl Default for WorldDistribution {
+    fn default() -> Self {
+        Self {
+            train: 0..=7_999,
+            validation: 8_000..=8_999,
+            test: 9_000..=9_999,
+        }
+    }
+}
+
+impl WorldDistribution {
+    pub fn validate(&self) -> Result<(), SimError> {
+        let ranges = [&self.train, &self.validation, &self.test];
+        if ranges.iter().any(|range| range.is_empty()) {
+            return Err(SimError::Scenario("world partition cannot be empty".into()));
+        }
+        for (index, left) in ranges.iter().enumerate() {
+            if ranges
+                .iter()
+                .skip(index + 1)
+                .any(|right| left.start() <= right.end() && right.start() <= left.end())
+            {
+                return Err(SimError::Scenario(
+                    "world partitions must not overlap".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn contains(&self, partition: WorldPartition, seed: u64) -> bool {
+        match partition {
+            WorldPartition::Train => self.train.contains(&seed),
+            WorldPartition::Validation => self.validation.contains(&seed),
+            WorldPartition::Test => self.test.contains(&seed),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WorldGeneratorConfig {
     pub generator_version: u32,
@@ -364,5 +418,16 @@ mod tests {
                 .windows(2)
                 .any(|pair| pair[0].world_hash != pair[1].world_hash)
         );
+    }
+
+    #[test]
+    fn default_world_partitions_are_disjoint_and_hold_out_test_seeds() {
+        let distribution = WorldDistribution::default();
+        distribution.validate().unwrap();
+        assert!(distribution.contains(WorldPartition::Train, 42));
+        assert!(distribution.contains(WorldPartition::Validation, 8_000));
+        assert!(distribution.contains(WorldPartition::Test, 9_000));
+        assert!(!distribution.contains(WorldPartition::Train, 9_000));
+        assert!(!distribution.contains(WorldPartition::Validation, 9_000));
     }
 }
