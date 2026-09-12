@@ -1,4 +1,4 @@
-from embodied_ai.learning import TabularQConfig, TabularQPolicy, train_tabular_q
+from embodied_ai.learning import TabularQConfig, TabularQPolicy, evaluate_tabular_q, train_tabular_q
 
 
 def observation(health=100):
@@ -30,3 +30,16 @@ def test_tabular_q_training_uses_rl_style_environment_only():
     episodes = train_tabular_q(Environment, policy, [1, 2])
     assert [episode["terminal_reason"] for episode in episodes] == ["escaped", "escaped"]
     assert all(episode["total_reward"] == 2 for episode in episodes)
+
+
+def test_tabular_q_evaluation_is_greedy_and_does_not_mutate_values():
+    class Environment:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def reset(self, *, seed): return observation(), {}
+        def step(self, _action): return observation(), 1, True, False, {"terminal_reason": "escaped"}
+    policy = TabularQPolicy(TabularQConfig(epsilon=1), seed=1)
+    policy.q_values[policy.observation_key(observation())] = [2, 0, 0, 0, 0, 0]
+    before = dict(policy.q_values)
+    assert evaluate_tabular_q(Environment, policy, [9])[0]["terminal_reason"] == "escaped"
+    assert policy.config.epsilon == 1 and policy.q_values == before

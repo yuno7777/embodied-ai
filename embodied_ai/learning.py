@@ -140,3 +140,35 @@ def train_tabular_q(
             else:
                 episodes.append({"seed": seed, "steps": max_steps, "total_reward": total_reward, "terminal_reason": "trainer_step_limit"})
     return episodes
+
+
+def evaluate_tabular_q(
+    environment_factory: Callable[[], Any], policy: TabularQPolicy, seeds: list[int], max_steps: int = 256,
+    reset_options_for_seed: Callable[[int], dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Evaluate a frozen greedy checkpoint without mutating its Q-values."""
+    if not seeds or max_steps < 1:
+        raise ValueError("evaluation requires seeds and a positive max_steps")
+    original_epsilon = policy.config.epsilon
+    policy.config = TabularQConfig(policy.config.learning_rate, policy.config.discount, 0)
+    try:
+        episodes = []
+        with environment_factory() as environment:
+            for seed in seeds:
+                policy.reset(seed)
+                if reset_options_for_seed:
+                    observation, _ = environment.reset(seed=seed, options=reset_options_for_seed(seed))
+                else:
+                    observation, _ = environment.reset(seed=seed)
+                total_reward = 0.0
+                for step in range(1, max_steps + 1):
+                    next_observation, reward, terminated, truncated, info = environment.step(policy.act(observation))
+                    observation, total_reward = next_observation, total_reward + reward
+                    if terminated or truncated:
+                        episodes.append({"seed": seed, "steps": step, "total_reward": total_reward, "terminal_reason": info.get("terminal_reason")})
+                        break
+                else:
+                    episodes.append({"seed": seed, "steps": max_steps, "total_reward": total_reward, "terminal_reason": "evaluator_step_limit"})
+        return episodes
+    finally:
+        policy.config = TabularQConfig(policy.config.learning_rate, policy.config.discount, original_epsilon)
