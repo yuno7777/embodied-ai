@@ -2191,7 +2191,8 @@ mod tests {
                 .events
                 .iter()
                 .any(|event| event.kind == "InspectionCompleted"
-                    && event.message.contains("friendly"))
+                    && event.message.contains("wary")
+                    && !event.message.contains("trust"))
         );
     }
     #[test]
