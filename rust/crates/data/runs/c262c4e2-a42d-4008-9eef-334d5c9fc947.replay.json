@@ -1,0 +1,1331 @@
+{
+  "seed": 42,
+  "scenario_id": "survival_room",
+  "scenario_version": 3,
+  "observation_mode": "normal",
+  "engine_version": "rust-v1",
+  "snapshot": {
+    "run_id": "c262c4e2-a42d-4008-9eef-334d5c9fc947",
+    "step": 1,
+    "simulation_time": 1,
+    "goal": "Survive, search the shelter and service room for the brass key, then escape through the east exit.",
+    "width": 15,
+    "height": 9,
+    "walls": [
+      {
+        "x": 0,
+        "y": 0
+      },
+      {
+        "x": 1,
+        "y": 0
+      },
+      {
+        "x": 2,
+        "y": 0
+      },
+      {
+        "x": 3,
+        "y": 0
+      },
+      {
+        "x": 4,
+        "y": 0
+      },
+      {
+        "x": 5,
+        "y": 0
+      },
+      {
+        "x": 6,
+        "y": 0
+      },
+      {
+        "x": 7,
+        "y": 0
+      },
+      {
+        "x": 8,
+        "y": 0
+      },
+      {
+        "x": 9,
+        "y": 0
+      },
+      {
+        "x": 10,
+        "y": 0
+      },
+      {
+        "x": 11,
+        "y": 0
+      },
+      {
+        "x": 12,
+        "y": 0
+      },
+      {
+        "x": 13,
+        "y": 0
+      },
+      {
+        "x": 14,
+        "y": 0
+      },
+      {
+        "x": 0,
+        "y": 8
+      },
+      {
+        "x": 1,
+        "y": 8
+      },
+      {
+        "x": 2,
+        "y": 8
+      },
+      {
+        "x": 3,
+        "y": 8
+      },
+      {
+        "x": 4,
+        "y": 8
+      },
+      {
+        "x": 5,
+        "y": 8
+      },
+      {
+        "x": 6,
+        "y": 8
+      },
+      {
+        "x": 7,
+        "y": 8
+      },
+      {
+        "x": 8,
+        "y": 8
+      },
+      {
+        "x": 9,
+        "y": 8
+      },
+      {
+        "x": 10,
+        "y": 8
+      },
+      {
+        "x": 11,
+        "y": 8
+      },
+      {
+        "x": 12,
+        "y": 8
+      },
+      {
+        "x": 13,
+        "y": 8
+      },
+      {
+        "x": 14,
+        "y": 8
+      },
+      {
+        "x": 0,
+        "y": 1
+      },
+      {
+        "x": 14,
+        "y": 1
+      },
+      {
+        "x": 0,
+        "y": 2
+      },
+      {
+        "x": 14,
+        "y": 2
+      },
+      {
+        "x": 0,
+        "y": 3
+      },
+      {
+        "x": 14,
+        "y": 3
+      },
+      {
+        "x": 0,
+        "y": 4
+      },
+      {
+        "x": 14,
+        "y": 4
+      },
+      {
+        "x": 0,
+        "y": 5
+      },
+      {
+        "x": 14,
+        "y": 5
+      },
+      {
+        "x": 0,
+        "y": 6
+      },
+      {
+        "x": 14,
+        "y": 6
+      },
+      {
+        "x": 0,
+        "y": 7
+      },
+      {
+        "x": 14,
+        "y": 7
+      },
+      {
+        "x": 7,
+        "y": 1
+      },
+      {
+        "x": 7,
+        "y": 2
+      },
+      {
+        "x": 7,
+        "y": 3
+      },
+      {
+        "x": 7,
+        "y": 4
+      },
+      {
+        "x": 7,
+        "y": 5
+      },
+      {
+        "x": 7,
+        "y": 6
+      },
+      {
+        "x": 7,
+        "y": 7
+      }
+    ],
+    "agent": {
+      "id": "agent_01",
+      "name": "Explorer",
+      "position": {
+        "x": 1,
+        "y": 4
+      },
+      "facing": "east",
+      "health": 100,
+      "energy": 99,
+      "hydration": 99,
+      "inventory": [],
+      "max_inventory": 4,
+      "status_effects": [],
+      "alive": true,
+      "escaped": false
+    },
+    "items": [
+      {
+        "id": "water",
+        "name": "Water flask",
+        "type": "water",
+        "position": {
+          "x": 2,
+          "y": 2
+        },
+        "energy": 0,
+        "hydration": 25,
+        "health": 0,
+        "consumable": true
+      },
+      {
+        "id": "food",
+        "name": "Energy ration",
+        "type": "food",
+        "position": {
+          "x": 3,
+          "y": 6
+        },
+        "energy": 25,
+        "hydration": 0,
+        "health": 0,
+        "consumable": true
+      },
+      {
+        "id": "exit_key",
+        "name": "Brass exit key",
+        "type": "key",
+        "position": {
+          "x": 4,
+          "y": 2
+        },
+        "energy": 0,
+        "hydration": 0,
+        "health": 0,
+        "consumable": false
+      }
+    ],
+    "doors": [
+      {
+        "id": "service_door",
+        "position": {
+          "x": 7,
+          "y": 5
+        },
+        "locked": false,
+        "open": false,
+        "key_id": null
+      },
+      {
+        "id": "exit_door",
+        "position": {
+          "x": 14,
+          "y": 4
+        },
+        "locked": true,
+        "open": false,
+        "key_id": "exit_key"
+      }
+    ],
+    "hazards": [
+      {
+        "id": "sparks",
+        "position": {
+          "x": 10,
+          "y": 4
+        },
+        "damage": 8
+      }
+    ],
+    "npc": {
+      "id": "caretaker",
+      "position": {
+        "x": 3,
+        "y": 5
+      },
+      "hint": "The brass key is inside the locker in the north of this shelter. Use the service door, then avoid the sparking corridor."
+    },
+    "containers": [
+      {
+        "id": "key_locker",
+        "position": {
+          "x": 4,
+          "y": 2
+        },
+        "open": false,
+        "contents": [
+          "exit_key"
+        ]
+      }
+    ],
+    "done": false,
+    "terminal_reason": null,
+    "metrics": {
+      "escaped": false,
+      "alive": true,
+      "steps_taken": 1,
+      "simulated_time": 1,
+      "final_health": 100,
+      "final_energy": 99,
+      "final_hydration": 99,
+      "invalid_actions": 0,
+      "repeated_invalid_actions": 0,
+      "unique_cells_visited": 1,
+      "useful_items_acquired": 0,
+      "hazard_damage_taken": 0,
+      "npc_interactions": 0,
+      "unnecessary_actions": 0,
+      "recovery_after_failure": false,
+      "normalized_score": 9.9
+    }
+  },
+  "events": [
+    {
+      "event_id": "3634119d-47e3-41e8-a83f-994f673af440",
+      "run_id": "c262c4e2-a42d-4008-9eef-334d5c9fc947",
+      "step": 1,
+      "simulation_time": 1,
+      "timestamp": "2026-09-10T21:26:58.667044900Z",
+      "type": "ActionCompleted",
+      "message": "You wait briefly."
+    }
+  ],
+  "timeline": [
+    {
+      "run_id": "c262c4e2-a42d-4008-9eef-334d5c9fc947",
+      "step": 0,
+      "simulation_time": 0,
+      "goal": "Survive, search the shelter and service room for the brass key, then escape through the east exit.",
+      "width": 15,
+      "height": 9,
+      "walls": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 0
+        },
+        {
+          "x": 2,
+          "y": 0
+        },
+        {
+          "x": 3,
+          "y": 0
+        },
+        {
+          "x": 4,
+          "y": 0
+        },
+        {
+          "x": 5,
+          "y": 0
+        },
+        {
+          "x": 6,
+          "y": 0
+        },
+        {
+          "x": 7,
+          "y": 0
+        },
+        {
+          "x": 8,
+          "y": 0
+        },
+        {
+          "x": 9,
+          "y": 0
+        },
+        {
+          "x": 10,
+          "y": 0
+        },
+        {
+          "x": 11,
+          "y": 0
+        },
+        {
+          "x": 12,
+          "y": 0
+        },
+        {
+          "x": 13,
+          "y": 0
+        },
+        {
+          "x": 14,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": 8
+        },
+        {
+          "x": 1,
+          "y": 8
+        },
+        {
+          "x": 2,
+          "y": 8
+        },
+        {
+          "x": 3,
+          "y": 8
+        },
+        {
+          "x": 4,
+          "y": 8
+        },
+        {
+          "x": 5,
+          "y": 8
+        },
+        {
+          "x": 6,
+          "y": 8
+        },
+        {
+          "x": 7,
+          "y": 8
+        },
+        {
+          "x": 8,
+          "y": 8
+        },
+        {
+          "x": 9,
+          "y": 8
+        },
+        {
+          "x": 10,
+          "y": 8
+        },
+        {
+          "x": 11,
+          "y": 8
+        },
+        {
+          "x": 12,
+          "y": 8
+        },
+        {
+          "x": 13,
+          "y": 8
+        },
+        {
+          "x": 14,
+          "y": 8
+        },
+        {
+          "x": 0,
+          "y": 1
+        },
+        {
+          "x": 14,
+          "y": 1
+        },
+        {
+          "x": 0,
+          "y": 2
+        },
+        {
+          "x": 14,
+          "y": 2
+        },
+        {
+          "x": 0,
+          "y": 3
+        },
+        {
+          "x": 14,
+          "y": 3
+        },
+        {
+          "x": 0,
+          "y": 4
+        },
+        {
+          "x": 14,
+          "y": 4
+        },
+        {
+          "x": 0,
+          "y": 5
+        },
+        {
+          "x": 14,
+          "y": 5
+        },
+        {
+          "x": 0,
+          "y": 6
+        },
+        {
+          "x": 14,
+          "y": 6
+        },
+        {
+          "x": 0,
+          "y": 7
+        },
+        {
+          "x": 14,
+          "y": 7
+        },
+        {
+          "x": 7,
+          "y": 1
+        },
+        {
+          "x": 7,
+          "y": 2
+        },
+        {
+          "x": 7,
+          "y": 3
+        },
+        {
+          "x": 7,
+          "y": 4
+        },
+        {
+          "x": 7,
+          "y": 5
+        },
+        {
+          "x": 7,
+          "y": 6
+        },
+        {
+          "x": 7,
+          "y": 7
+        }
+      ],
+      "agent": {
+        "id": "agent_01",
+        "name": "Explorer",
+        "position": {
+          "x": 1,
+          "y": 4
+        },
+        "facing": "east",
+        "health": 100,
+        "energy": 100,
+        "hydration": 100,
+        "inventory": [],
+        "max_inventory": 4,
+        "status_effects": [],
+        "alive": true,
+        "escaped": false
+      },
+      "items": [
+        {
+          "id": "water",
+          "name": "Water flask",
+          "type": "water",
+          "position": {
+            "x": 2,
+            "y": 2
+          },
+          "energy": 0,
+          "hydration": 25,
+          "health": 0,
+          "consumable": true
+        },
+        {
+          "id": "food",
+          "name": "Energy ration",
+          "type": "food",
+          "position": {
+            "x": 3,
+            "y": 6
+          },
+          "energy": 25,
+          "hydration": 0,
+          "health": 0,
+          "consumable": true
+        },
+        {
+          "id": "exit_key",
+          "name": "Brass exit key",
+          "type": "key",
+          "position": {
+            "x": 4,
+            "y": 2
+          },
+          "energy": 0,
+          "hydration": 0,
+          "health": 0,
+          "consumable": false
+        }
+      ],
+      "doors": [
+        {
+          "id": "service_door",
+          "position": {
+            "x": 7,
+            "y": 5
+          },
+          "locked": false,
+          "open": false,
+          "key_id": null
+        },
+        {
+          "id": "exit_door",
+          "position": {
+            "x": 14,
+            "y": 4
+          },
+          "locked": true,
+          "open": false,
+          "key_id": "exit_key"
+        }
+      ],
+      "hazards": [
+        {
+          "id": "sparks",
+          "position": {
+            "x": 10,
+            "y": 4
+          },
+          "damage": 8
+        }
+      ],
+      "npc": {
+        "id": "caretaker",
+        "position": {
+          "x": 3,
+          "y": 5
+        },
+        "hint": "The brass key is inside the locker in the north of this shelter. Use the service door, then avoid the sparking corridor."
+      },
+      "containers": [
+        {
+          "id": "key_locker",
+          "position": {
+            "x": 4,
+            "y": 2
+          },
+          "open": false,
+          "contents": [
+            "exit_key"
+          ]
+        }
+      ],
+      "done": false,
+      "terminal_reason": null,
+      "metrics": {
+        "escaped": false,
+        "alive": true,
+        "steps_taken": 0,
+        "simulated_time": 0,
+        "final_health": 100,
+        "final_energy": 100,
+        "final_hydration": 100,
+        "invalid_actions": 0,
+        "repeated_invalid_actions": 0,
+        "unique_cells_visited": 1,
+        "useful_items_acquired": 0,
+        "hazard_damage_taken": 0,
+        "npc_interactions": 0,
+        "unnecessary_actions": 0,
+        "recovery_after_failure": false,
+        "normalized_score": 10.0
+      }
+    },
+    {
+      "run_id": "c262c4e2-a42d-4008-9eef-334d5c9fc947",
+      "step": 1,
+      "simulation_time": 1,
+      "goal": "Survive, search the shelter and service room for the brass key, then escape through the east exit.",
+      "width": 15,
+      "height": 9,
+      "walls": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 0
+        },
+        {
+          "x": 2,
+          "y": 0
+        },
+        {
+          "x": 3,
+          "y": 0
+        },
+        {
+          "x": 4,
+          "y": 0
+        },
+        {
+          "x": 5,
+          "y": 0
+        },
+        {
+          "x": 6,
+          "y": 0
+        },
+        {
+          "x": 7,
+          "y": 0
+        },
+        {
+          "x": 8,
+          "y": 0
+        },
+        {
+          "x": 9,
+          "y": 0
+        },
+        {
+          "x": 10,
+          "y": 0
+        },
+        {
+          "x": 11,
+          "y": 0
+        },
+        {
+          "x": 12,
+          "y": 0
+        },
+        {
+          "x": 13,
+          "y": 0
+        },
+        {
+          "x": 14,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": 8
+        },
+        {
+          "x": 1,
+          "y": 8
+        },
+        {
+          "x": 2,
+          "y": 8
+        },
+        {
+          "x": 3,
+          "y": 8
+        },
+        {
+          "x": 4,
+          "y": 8
+        },
+        {
+          "x": 5,
+          "y": 8
+        },
+        {
+          "x": 6,
+          "y": 8
+        },
+        {
+          "x": 7,
+          "y": 8
+        },
+        {
+          "x": 8,
+          "y": 8
+        },
+        {
+          "x": 9,
+          "y": 8
+        },
+        {
+          "x": 10,
+          "y": 8
+        },
+        {
+          "x": 11,
+          "y": 8
+        },
+        {
+          "x": 12,
+          "y": 8
+        },
+        {
+          "x": 13,
+          "y": 8
+        },
+        {
+          "x": 14,
+          "y": 8
+        },
+        {
+          "x": 0,
+          "y": 1
+        },
+        {
+          "x": 14,
+          "y": 1
+        },
+        {
+          "x": 0,
+          "y": 2
+        },
+        {
+          "x": 14,
+          "y": 2
+        },
+        {
+          "x": 0,
+          "y": 3
+        },
+        {
+          "x": 14,
+          "y": 3
+        },
+        {
+          "x": 0,
+          "y": 4
+        },
+        {
+          "x": 14,
+          "y": 4
+        },
+        {
+          "x": 0,
+          "y": 5
+        },
+        {
+          "x": 14,
+          "y": 5
+        },
+        {
+          "x": 0,
+          "y": 6
+        },
+        {
+          "x": 14,
+          "y": 6
+        },
+        {
+          "x": 0,
+          "y": 7
+        },
+        {
+          "x": 14,
+          "y": 7
+        },
+        {
+          "x": 7,
+          "y": 1
+        },
+        {
+          "x": 7,
+          "y": 2
+        },
+        {
+          "x": 7,
+          "y": 3
+        },
+        {
+          "x": 7,
+          "y": 4
+        },
+        {
+          "x": 7,
+          "y": 5
+        },
+        {
+          "x": 7,
+          "y": 6
+        },
+        {
+          "x": 7,
+          "y": 7
+        }
+      ],
+      "agent": {
+        "id": "agent_01",
+        "name": "Explorer",
+        "position": {
+          "x": 1,
+          "y": 4
+        },
+        "facing": "east",
+        "health": 100,
+        "energy": 99,
+        "hydration": 99,
+        "inventory": [],
+        "max_inventory": 4,
+        "status_effects": [],
+        "alive": true,
+        "escaped": false
+      },
+      "items": [
+        {
+          "id": "water",
+          "name": "Water flask",
+          "type": "water",
+          "position": {
+            "x": 2,
+            "y": 2
+          },
+          "energy": 0,
+          "hydration": 25,
+          "health": 0,
+          "consumable": true
+        },
+        {
+          "id": "food",
+          "name": "Energy ration",
+          "type": "food",
+          "position": {
+            "x": 3,
+            "y": 6
+          },
+          "energy": 25,
+          "hydration": 0,
+          "health": 0,
+          "consumable": true
+        },
+        {
+          "id": "exit_key",
+          "name": "Brass exit key",
+          "type": "key",
+          "position": {
+            "x": 4,
+            "y": 2
+          },
+          "energy": 0,
+          "hydration": 0,
+          "health": 0,
+          "consumable": false
+        }
+      ],
+      "doors": [
+        {
+          "id": "service_door",
+          "position": {
+            "x": 7,
+            "y": 5
+          },
+          "locked": false,
+          "open": false,
+          "key_id": null
+        },
+        {
+          "id": "exit_door",
+          "position": {
+            "x": 14,
+            "y": 4
+          },
+          "locked": true,
+          "open": false,
+          "key_id": "exit_key"
+        }
+      ],
+      "hazards": [
+        {
+          "id": "sparks",
+          "position": {
+            "x": 10,
+            "y": 4
+          },
+          "damage": 8
+        }
+      ],
+      "npc": {
+        "id": "caretaker",
+        "position": {
+          "x": 3,
+          "y": 5
+        },
+        "hint": "The brass key is inside the locker in the north of this shelter. Use the service door, then avoid the sparking corridor."
+      },
+      "containers": [
+        {
+          "id": "key_locker",
+          "position": {
+            "x": 4,
+            "y": 2
+          },
+          "open": false,
+          "contents": [
+            "exit_key"
+          ]
+        }
+      ],
+      "done": false,
+      "terminal_reason": null,
+      "metrics": {
+        "escaped": false,
+        "alive": true,
+        "steps_taken": 1,
+        "simulated_time": 1,
+        "final_health": 100,
+        "final_energy": 99,
+        "final_hydration": 99,
+        "invalid_actions": 0,
+        "repeated_invalid_actions": 0,
+        "unique_cells_visited": 1,
+        "useful_items_acquired": 0,
+        "hazard_damage_taken": 0,
+        "npc_interactions": 0,
+        "unnecessary_actions": 0,
+        "recovery_after_failure": false,
+        "normalized_score": 9.9
+      }
+    }
+  ],
+  "observations": [
+    {
+      "protocol_version": 1,
+      "run_id": "c262c4e2-a42d-4008-9eef-334d5c9fc947",
+      "step": 0,
+      "observation_mode": "normal",
+      "agent": {
+        "id": "agent_01",
+        "name": "Explorer",
+        "position": {
+          "x": 1,
+          "y": 4
+        },
+        "facing": "east",
+        "health": 100,
+        "energy": 100,
+        "hydration": 100,
+        "inventory": [],
+        "max_inventory": 4,
+        "status_effects": [],
+        "alive": true,
+        "escaped": false
+      },
+      "goal": "Survive, search the shelter and service room for the brass key, then escape through the east exit.",
+      "visible_cells": [
+        {
+          "relative_position": {
+            "x": 0,
+            "y": -2
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": -1,
+            "y": -1
+          },
+          "terrain": "wall",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 0,
+            "y": -1
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 1,
+            "y": -1
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": -1,
+            "y": 0
+          },
+          "terrain": "wall",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 0,
+            "y": 0
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 1,
+            "y": 0
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 2,
+            "y": 0
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": -1,
+            "y": 1
+          },
+          "terrain": "wall",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 0,
+            "y": 1
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 1,
+            "y": 1
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 0,
+            "y": 2
+          },
+          "terrain": "floor",
+          "entities": []
+        }
+      ],
+      "recent_events": [],
+      "perception_note": null,
+      "allowed_action_types": [
+        "move",
+        "inspect",
+        "pickup",
+        "drop",
+        "use_item",
+        "open",
+        "close",
+        "talk",
+        "wait",
+        "rest"
+      ]
+    },
+    {
+      "protocol_version": 1,
+      "run_id": "c262c4e2-a42d-4008-9eef-334d5c9fc947",
+      "step": 1,
+      "observation_mode": "normal",
+      "agent": {
+        "id": "agent_01",
+        "name": "Explorer",
+        "position": {
+          "x": 1,
+          "y": 4
+        },
+        "facing": "east",
+        "health": 100,
+        "energy": 99,
+        "hydration": 99,
+        "inventory": [],
+        "max_inventory": 4,
+        "status_effects": [],
+        "alive": true,
+        "escaped": false
+      },
+      "goal": "Survive, search the shelter and service room for the brass key, then escape through the east exit.",
+      "visible_cells": [
+        {
+          "relative_position": {
+            "x": 0,
+            "y": -2
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": -1,
+            "y": -1
+          },
+          "terrain": "wall",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 0,
+            "y": -1
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 1,
+            "y": -1
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": -1,
+            "y": 0
+          },
+          "terrain": "wall",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 0,
+            "y": 0
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 1,
+            "y": 0
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 2,
+            "y": 0
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": -1,
+            "y": 1
+          },
+          "terrain": "wall",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 0,
+            "y": 1
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 1,
+            "y": 1
+          },
+          "terrain": "floor",
+          "entities": []
+        },
+        {
+          "relative_position": {
+            "x": 0,
+            "y": 2
+          },
+          "terrain": "floor",
+          "entities": []
+        }
+      ],
+      "recent_events": [
+        "You wait briefly."
+      ],
+      "perception_note": null,
+      "allowed_action_types": [
+        "move",
+        "inspect",
+        "pickup",
+        "drop",
+        "use_item",
+        "open",
+        "close",
+        "talk",
+        "wait",
+        "rest"
+      ]
+    }
+  ]
+}

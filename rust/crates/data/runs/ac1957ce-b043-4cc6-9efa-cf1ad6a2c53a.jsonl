@@ -1,0 +1,1 @@
+{"event_id":"d1cd9a12-91f3-4bcd-a85f-128654290312","run_id":"ac1957ce-b043-4cc6-9efa-cf1ad6a2c53a","step":0,"simulation_time":0,"timestamp":"2026-09-11T23:08:25.996425200Z","type":"RunInterrupted","message":"The orchestration wall-clock time budget was exhausted."}

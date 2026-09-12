@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://embodied-worlds.local/schemas/action-request.v1.json",
+  "title": "ActionRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["move", "inspect", "pickup", "drop", "use_item", "open", "close", "talk", "give", "wait", "rest"]
+    },
+    "direction": {
+      "anyOf": [
+        { "type": "string", "enum": ["north", "south", "east", "west"] },
+        { "type": "null" }
+      ],
+      "default": null
+    },
+    "target_id": {
+      "anyOf": [
+        { "type": "string", "maxLength": 128 },
+        { "type": "null" }
+      ],
+      "default": null
+    },
+    "item_id": {
+      "anyOf": [
+        { "type": "string", "maxLength": 128 },
+        { "type": "null" }
+      ],
+      "default": null
+    },
+    "message": {
+      "anyOf": [
+        { "type": "string", "maxLength": 500 },
+        { "type": "null" }
+      ],
+      "default": null
+    }
+  },
+  "required": ["type"]
+}

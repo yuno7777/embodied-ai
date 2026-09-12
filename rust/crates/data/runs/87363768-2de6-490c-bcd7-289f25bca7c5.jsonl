@@ -1,0 +1,2 @@
+{"event_id":"1f8a21fc-e327-406f-b36a-d906f5879a7d","run_id":"87363768-2de6-490c-bcd7-289f25bca7c5","step":1,"simulation_time":1,"timestamp":"2026-09-12T16:47:00.415607600Z","type":"ActionCompleted","message":"You wait briefly."}
+{"event_id":"523f98e7-c9d5-4d2b-ab03-9a2473c1434f","run_id":"87363768-2de6-490c-bcd7-289f25bca7c5","step":2,"simulation_time":2,"timestamp":"2026-09-12T16:47:00.424308400Z","type":"ActionCompleted","message":"You wait briefly."}

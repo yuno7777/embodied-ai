@@ -1,0 +1,2 @@
+{"event_id":"dfb29260-02ee-4f4a-bab4-8e04035809bb","run_id":"329ab10a-990a-404c-9fc9-65c5bb4cbd58","step":1,"simulation_time":1,"timestamp":"2026-09-11T22:56:28.569721500Z","type":"ActionCompleted","message":"You wait briefly."}
+{"event_id":"65ca5a32-9346-4883-84a1-1c0a79fbc4bb","run_id":"329ab10a-990a-404c-9fc9-65c5bb4cbd58","step":1,"simulation_time":1,"timestamp":"2026-09-11T22:56:28.569747300Z","type":"RunTimedOut","message":"Maximum steps reached."}

@@ -1,0 +1,9 @@
+{
+  "scenario_id": "survival_room",
+  "provider": "mock_reasoning",
+  "runs": 1,
+  "success_rate": 1.0,
+  "mean_score": 100.0,
+  "engine_version": "rust-v1",
+  "base_url": "http://127.0.0.1:8080"
+}

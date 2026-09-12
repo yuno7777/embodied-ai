@@ -1,0 +1,8 @@
+{
+  "scenario_id": "survival_room",
+  "provider": "scripted",
+  "runs": 2,
+  "success_rate": 1.0,
+  "mean_score": 100.0,
+  "engine_version": "python-prototype-v1"
+}

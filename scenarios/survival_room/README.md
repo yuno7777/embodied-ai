@@ -1,0 +1,3 @@
+# Survival Room
+
+The agent starts in a shelter connected to a service room by a closed interior door. Water and food offer a recoverable resource mistake; the caretaker's local hint points toward a locker holding the east-exit key. A separate steel utility key opens both a supply locker and an alternate west emergency exit, creating preparation, direct, and NPC-guided escape routes. Items have weight, the flashlight expands local perception, the bandage restores health and clears configured injuries, and the scenario has both step and simulated-time limits. The service room contains typed hazards whose active state may change. Scenario definitions are data, not provider prompts; agents only receive local observations.

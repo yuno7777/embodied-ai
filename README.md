@@ -1,0 +1,126 @@
+# Embodied Worlds
+
+Embodied Worlds is a local research platform for evaluating an AI policy inside a deterministic, partially observed simulated body. A provider proposes a single structured action. The authoritative engine validates it, changes the world, emits events, and returns only the observation the body may perceive.
+
+```mermaid
+flowchart LR
+  P[Gemini or mock provider] -->|one validated Action| R[Rust simulation authority]
+  R -->|filtered Observation + events| P
+  R --> S[Next.js observer]
+  P --> D[JSONL / Parquet trajectories]
+```
+
+## Current V1
+
+The Survival Room has two connected rooms, a locked exit, key locker, food, water, an electrical hazard, an NPC, seeded deterministic ambient events, a seed-dependent service-door perturbation, and resource constraints. The Rust workspace contains the authoritative engine and Axum server source. The Python package provides mock providers, a Gemini adapter, compact episodic context, run orchestration, JSONL/Parquet output, and a repeatable benchmark CLI. The Next.js observer is a separate local process with a manual-control baseline.
+
+## Prerequisites
+
+- Python 3.12+
+- Node 20+
+- Rust stable plus Microsoft C++ Build Tools on Windows for the Rust server
+
+Docker is intentionally not required for the current local setup.
+
+## Setup
+
+```powershell
+python -m pip install -e .
+npm install --prefix frontend/observer
+```
+
+Copy `.env.example` to `.env`, then set `GEMINI_API_KEY` only when using Gemini. Never commit that file.
+
+## Run individual processes
+
+Start all three as independent background processes, with health checks and logs under `data/local-processes/`:
+
+```powershell
+.\scripts\start-local.ps1
+```
+
+Pass `-NoBrowser` for a headless launch. The commands below remain available when you want each process in its own terminal.
+
+Terminal 1 (authoritative Rust API):
+
+```powershell
+.\scripts\dev.ps1
+```
+
+The Rust process uses `SIM_SERVER_PORT` when it is set; otherwise it uses `8080`. Keep the observer's `NEXT_PUBLIC_SIM_SERVER_URL` and `NEXT_PUBLIC_SIM_WS_URL` aligned if you choose a different port.
+
+Terminal 2 (Next.js observer):
+
+```powershell
+npm run dev --prefix frontend/observer
+```
+
+Terminal 3 (optional browser-to-provider control service):
+
+```powershell
+python -m embodied_ai.agent_service --server-url http://127.0.0.1:8080
+```
+
+Open `http://localhost:3000`.
+
+The helper configures the local Windows Rust toolchain. It is the only simulation server; Python only orchestrates model decisions through the Rust HTTP API. With Terminal 3 running, choose a provider and observation mode in the observer and select **Start agent**. It returns the authoritative run ID immediately, while the provider continues independently and the Rust WebSocket streams the live simulation. Use **Start manual** for the human-control baseline.
+
+## Run policies and benchmarks
+
+```powershell
+python -m embodied_ai.cli run --scenario survival_room --provider scripted --seed 42 --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli benchmark --scenario survival_room --provider scripted --runs 20 --seed-start 1000 --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli run --provider gemini --max-wall-seconds 300 --max-total-tokens 20000 --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli run --provider cautious --resume-run-id YOUR_LIVE_RUN_ID --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli run --provider cautious --restore-replay-id YOUR_PERSISTED_REPLAY_ID --server-url http://127.0.0.1:8080
+```
+
+Start the Rust server before either command. Rust events are persisted as replayable JSONL plus a structured replay record (including initial and per-step researcher snapshots and the exact filtered observations supplied to the agent) under `data/runs/`; the observer library loads those saved replays after a server restart and supports step/playback controls. The Python run and benchmark commands also export step-level Rust observations, decisions, events and metrics as JSONL/Parquet.
+
+`scripted`, `mock_reasoning`, and `random_valid` require no API key. The Gemini adapter uses the official `google-genai` SDK, structured JSON output, timeouts and post-response Pydantic validation; it is intentionally opt-in.
+
+If an in-run provider call exhausts its retries, the runner marks the authoritative run as `provider_error`, persists the partial replay, and returns a clean terminal result instead of leaving an active run behind.
+
+With `GEMINI_API_KEY` set in `.env`, run Gemini against the Rust authority with:
+
+```powershell
+python -m embodied_ai.cli run --provider gemini --server-url http://127.0.0.1:8080
+```
+
+Pass `--model <Gemini model name>` to override `GEMINI_MODEL`, `--max-steps <positive integer>` to create an authoritative run with a shorter timeout, or `--observation-mode minimal|normal|rich` for a reproducible perception ablation.
+
+## Verify
+
+```powershell
+.\scripts\test_all.ps1
+.\scripts\validate-scenario.ps1
+```
+
+Run the complete no-Docker smoke test (it starts and stops a temporary Rust process, executes the scripted Python policy, then validates the persisted events and replay):
+
+```powershell
+.\scripts\smoke_test.ps1
+```
+
+Benchmark the Rust core directly (no browser, server, or model call):
+
+```powershell
+.\scripts\use-rust-env.ps1
+Push-Location rust
+cargo bench -p sim-core
+Pop-Location
+```
+
+## Known limitations
+
+For a real-browser smoke test, start the three local processes, then run:
+
+```powershell
+.\scripts\browser-smoke.ps1
+```
+
+This uses pinned `agent-browser` tooling through npm and your installed Chrome (override `-BrowserPath` if needed). It creates a two-step manual run, checks live state, filters, read-only replay navigation, light theme, mobile overflow, and page errors. Screenshots are saved under `data/browser-smoke/`. No browser binary is downloaded and existing browser profiles are not used.
+
+PostgreSQL metadata and full Rust/Python schema parity are not complete yet. The current local workflow deliberately uses individual Rust, Python, and Next.js processes; replay and JSONL persistence remain available without a database service. These limitations are documented rather than masked with fake success claims.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md), [RESEARCH.md](RESEARCH.md), [scenario authoring](docs/scenario-authoring.md), and [benchmarking](docs/benchmarking.md).

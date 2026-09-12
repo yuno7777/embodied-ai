@@ -1,0 +1,12 @@
+.env
+__pycache__/
+.pytest_cache/
+*.pyc
+rust/target/
+frontend/observer/node_modules/
+frontend/observer/.next/
+frontend/observer/tsconfig.tsbuildinfo
+data/local-processes/
+data/browser-smoke/
+data/runs/*
+!data/runs/.gitkeep
