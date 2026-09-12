@@ -4,49 +4,48 @@ import asyncio, json, os, time
 from typing import Protocol
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 from .context import AgentContext, SYSTEM_PROMPT
-from .engine import Action
 from .schemas import AgentDecision, ActionRequest
 
 class AgentProvider(Protocol):
     name: str
-    def choose_action(self, observation: dict) -> Action: ...
+    def choose_action(self, observation: dict) -> ActionRequest: ...
 
 class ScriptedProvider:
     name = "scripted"
     """Deterministic success route; safe for tests and repeatable benchmarks."""
     route=[("move","east"),("move","east"),("move","east"),("move","north"),("move","north"),("open",None),("pickup",None),("move","south"),("move","south"),("move","south"),("move","east"),("move","east"),("open",None),("move","east"),("move","east"),("move","east"),("move","south"),("move","east"),("move","east"),("move","east"),("move","east"),("move","north"),("move","north"),("open",None),("move","east")]
     def __init__(self): self.index=0
-    def choose_action(self, observation: dict) -> Action:
+    def choose_action(self, observation: dict) -> ActionRequest:
         kind,direction=self.route[min(self.index,len(self.route)-1)]; self.index+=1
         target = "key_locker" if kind=="open" and self.index==6 else ("service_door" if kind=="open" and self.index==13 else ("exit_door" if kind=="open" else None))
-        return Action(type=kind,direction=direction,target_id=target)
+        return ActionRequest(type=kind,direction=direction,target_id=target)
 
 class RandomValidProvider:
     name="random_valid"
     def __init__(self, seed: int = 0): import random; self.random=random.Random(seed)
-    def choose_action(self, observation: dict) -> Action:
-        return Action(type="move", direction=self.random.choice(["north","south","east","west"]))
+    def choose_action(self, observation: dict) -> ActionRequest:
+        return ActionRequest(type="move", direction=self.random.choice(["north","south","east","west"]))
 
 class ExplorerProvider:
     """Deterministic coverage baseline alternating local inspection and movement."""
     name = "explorer"
     directions = ("east", "north", "west", "south")
     def __init__(self): self.turn = 0
-    def choose_action(self, observation: dict) -> Action:
+    def choose_action(self, observation: dict) -> ActionRequest:
         self.turn += 1
         if self.turn % 5 == 1:
-            return Action(type="inspect")
-        return Action(type="move", direction=self.directions[(self.turn - 2) % len(self.directions)])
+            return ActionRequest(type="inspect")
+        return ActionRequest(type="move", direction=self.directions[(self.turn - 2) % len(self.directions)])
 
 class CautiousProvider:
     """Deterministic baseline that avoids observed adjacent active hazards and walls."""
     name = "cautious"
     directions = (("east", (1, 0)), ("south", (0, 1)), ("north", (0, -1)), ("west", (-1, 0)))
     def __init__(self): self.turn = 0
-    def choose_action(self, observation: dict) -> Action:
+    def choose_action(self, observation: dict) -> ActionRequest:
         self.turn += 1
         if self.turn == 1:
-            return Action(type="inspect")
+            return ActionRequest(type="inspect")
         cells = {(cell.get("relative_position", {}).get("x"), cell.get("relative_position", {}).get("y")): cell for cell in observation.get("visible_cells", [])}
         for direction, relative in self.directions:
             cell = cells.get(relative)
@@ -55,13 +54,13 @@ class CautiousProvider:
             unsafe = any(entity.get("type") == "hazard" and entity.get("state") != "inactive" for entity in cell.get("entities", []))
             blocked = any(entity.get("type") == "door" and entity.get("state") != "open" for entity in cell.get("entities", []))
             if not unsafe and not blocked:
-                return Action(type="move", direction=direction)
-        return Action(type="wait")
+                return ActionRequest(type="move", direction=direction)
+        return ActionRequest(type="wait")
 
 class MockReasoningProvider(ScriptedProvider):
     name="mock_reasoning"
     def decision(self, observation: dict) -> AgentDecision:
-        action=self.choose_action(observation); return AgentDecision(action=ActionRequest(**action.__dict__), decision_summary="Following a deterministic safe test policy.")
+        action=self.choose_action(observation); return AgentDecision(action=action, decision_summary="Following a deterministic safe test policy.")
 
 class GeminiProvider:
     """Opt-in official SDK adapter. Unit tests never instantiate it with a live key."""

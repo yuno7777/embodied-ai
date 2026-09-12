@@ -2,7 +2,6 @@ from embodied_ai.schemas import ActionRequest
 from embodied_ai.schemas import AgentDecision
 from embodied_ai.runner import RustRunClient
 from embodied_ai import runner
-from embodied_ai.engine import Action
 from pydantic import ValidationError
 import pytest
 import json
@@ -163,7 +162,7 @@ def test_runner_can_continue_an_existing_nonterminal_authoritative_run(monkeypat
         def close(self): pass
     class Provider:
         name = "resume"
-        def choose_action(self, _observation): return Action(type="wait")
+        def choose_action(self, _observation): return ActionRequest(type="wait")
     monkeypatch.setattr(runner, "RustRunClient", Client)
     result = runner.run_remote(Provider(), 7, resume_run_id="existing")
     assert result.run_id == "existing" and result.steps == 5 and result.terminal_reason == "escaped"
@@ -204,7 +203,7 @@ def test_runner_restores_a_persisted_replay_before_provider_control(monkeypatch)
         def close(self): pass
     class Provider:
         name="restored"
-        def choose_action(self, _observation): return Action(type="wait")
+        def choose_action(self, _observation): return ActionRequest(type="wait")
     monkeypatch.setattr(runner,"RustRunClient",Client)
     result=runner.run_remote(Provider(),7,restore_replay_id="saved")
     assert result.run_id=="rebuilt" and result.steps==4 and result.terminal_reason=="escaped"

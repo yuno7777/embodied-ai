@@ -1,3 +1,9 @@
+"""Quarantined legacy Python simulator.
+
+Rust ``sim-core`` is the only supported simulation authority. This module remains
+temporarily for historical migration coverage and must not be imported by new
+production code.
+"""
 from __future__ import annotations
 
 import json, uuid
@@ -30,7 +36,7 @@ class Scenario:
     def load(cls, path: Path = SCENARIO_PATH): return cls(json.loads(path.read_text()))
 
 class Environment:
-    """Authoritative world: providers can receive observations but cannot mutate it."""
+    """Legacy-only simulator retained during the Rust-authority migration."""
     protocol_version = 1
     def __init__(self, scenario: Scenario | None = None, seed: int = 42):
         self.scenario = scenario or Scenario.load(); self.seed = seed; self.run_id = str(uuid.uuid4())

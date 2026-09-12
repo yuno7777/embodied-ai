@@ -4,7 +4,7 @@ from pathlib import Path
 from .analysis import check_reproducibility, filter_trajectory, load_jsonl, summarize_trajectory, verify_replay
 from .benchmark import benchmark_remote, compare_benchmarks
 from .datasets import export_csv, export_jsonl, export_parquet
-from .engine import ROOT
+from .paths import ROOT
 from .providers import CautiousProvider, ExplorerProvider, GeminiProvider, ScriptedProvider, RandomValidProvider, MockReasoningProvider
 from .runner import run_remote
 

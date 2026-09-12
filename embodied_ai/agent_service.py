@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .cli import provider_for
 from .datasets import export_jsonl, export_parquet
-from .engine import ROOT
+from .paths import ROOT
 from .runner import RemoteRunResult, run_remote
 
 

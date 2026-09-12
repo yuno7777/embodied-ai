@@ -67,7 +67,10 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 if hasattr(provider, "choose"):
                     decision, provider_latency_ms=asyncio.run(provider.choose(observation,context)); action=decision.action; decision_summary=decision.decision_summary
                 else:
-                    raw=provider.choose_action(observation); action=ActionRequest(**raw.__dict__); provider_latency_ms=0; decision_summary="provider action submitted to Rust authority"
+                    action=provider.choose_action(observation)
+                    if not isinstance(action, ActionRequest):
+                        action = ActionRequest.model_validate(action)
+                    provider_latency_ms=0; decision_summary="provider action submitted to Rust authority"
                 if max_wall_seconds is not None and time.monotonic() - started >= max_wall_seconds:
                     client.stop(run_id, "client_timeout")
                     return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted during provider decision")

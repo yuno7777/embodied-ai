@@ -3,19 +3,8 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from .datasets import export_csv, export_jsonl, export_parquet
-from .engine import Environment
 from .providers import CautiousProvider, ExplorerProvider, GeminiProvider, MockReasoningProvider, RandomValidProvider, ScriptedProvider
 from .runner import run_remote
-
-def benchmark(runs: int, seed_start: int, output: Path) -> dict:
-    output.mkdir(parents=True, exist_ok=True); rows=[]
-    for index in range(runs):
-        env=Environment(seed=seed_start+index); provider=ScriptedProvider()
-        while not env.done: env.step(provider.choose_action(env.observe()))
-        rows.append({"run_id":env.run_id,"seed":env.seed,"scenario_id":env.scenario.raw["id"],"scenario_version":env.scenario.raw["version"],"provider":"scripted","outcome":env.terminal_reason,"steps":env.step_number,"final_health":env.agent.health,"invalid_actions":env.invalid_actions,"hazard_damage":env.hazard_damage,"score":100 if env.terminal_reason=="escaped" else 0})
-    export_parquet(rows, output / "runs.parquet")
-    summary={"scenario_id":"survival_room","provider":"scripted","runs":runs,"success_rate":sum(r["outcome"]=="escaped" for r in rows)/runs,"mean_score":sum(r["score"] for r in rows)/runs,"engine_version":"python-prototype-v1"}
-    (output / "benchmark_summary.json").write_text(json.dumps(summary, indent=2)); return summary
 
 def provider_for(name: str, seed: int):
     providers = {

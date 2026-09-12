@@ -1,7 +1,6 @@
 import json
 import pytest
 from pathlib import Path
-from embodied_ai.benchmark import benchmark
 from embodied_ai.context import AgentContext, SYSTEM_PROMPT
 from embodied_ai.datasets import export_jsonl, export_parquet
 from embodied_ai.providers import CautiousProvider, ExplorerProvider, RandomValidProvider
@@ -30,12 +29,10 @@ def test_context_window_rejects_invalid_bounds(window):
     with pytest.raises(ValueError):
         AgentContext(memory_window=window)
 
-def test_exports_and_benchmark(tmp_path: Path):
+def test_exports_are_written_without_a_second_python_simulator(tmp_path: Path):
     jsonl=export_jsonl([{"run_id":"r","step":1}],tmp_path/"events.jsonl")
     parquet=export_parquet([{"run_id":"r","step":1}],tmp_path/"events.parquet")
     assert json.loads(jsonl.read_text())['run_id']=="r" and parquet.exists()
-    report=benchmark(2, 10, tmp_path/"bench")
-    assert report['runs']==2 and (tmp_path/"bench"/"runs.parquet").exists()
 
 def test_random_provider_returns_allowed_action():
     action=RandomValidProvider(7).choose_action({})
