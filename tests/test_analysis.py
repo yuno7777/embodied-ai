@@ -42,7 +42,7 @@ def test_trajectory_filters_and_offline_replay_verification():
     with pytest.raises(TrajectoryValidationError): verify_replay(replay)
 
 def test_replay_reproducibility_ignores_only_generated_identifiers_and_timestamps():
-    left={"scenario_id":"s","scenario_version":1,"seed":7,"snapshot":{"run_id":"a","step":0,"agent":{"health":100}},"timeline":[{"run_id":"a","step":0}],"observations":[{}],"events":[{"event_id":"one","run_id":"a","timestamp":"now","type":"Created"}],"decisions":[]}
+    left={"engine_version":"rust-v1","observation_mode":"normal","max_steps":10,"reward_config":{"baseline_per_step":-1},"scenario_id":"s","scenario_version":1,"seed":7,"snapshot":{"run_id":"a","step":0,"agent":{"health":100}},"timeline":[{"run_id":"a","step":0}],"observations":[{}],"events":[{"event_id":"one","run_id":"a","timestamp":"now","type":"Created"}],"decisions":[]}
     right={**left,"snapshot":{**left["snapshot"],"run_id":"b","agent":{"health":100}},"timeline":[{"run_id":"b","step":0}],"events":[{"event_id":"two","run_id":"b","timestamp":"later","type":"Created"}]}
     left["timeline"] = [left["snapshot"]]
     right["timeline"] = [right["snapshot"]]
@@ -52,6 +52,16 @@ def test_replay_reproducibility_ignores_only_generated_identifiers_and_timestamp
     assert check_reproducibility(left,right)["reproducible"] is True
     right["snapshot"]["agent"]["health"]=99
     assert check_reproducibility(left,right)["reproducible"] is False
+
+
+def test_replay_reproducibility_rejects_different_generated_world_or_reward_inputs():
+    base = {"engine_version":"rust-v1", "observation_mode":"normal", "max_steps":10, "reward_config":{"baseline_per_step":-1}, "scenario_id":"generated", "scenario_version":1, "seed":7, "world_manifest":{"world_hash":"fnv1a64:a", "seed":99}, "snapshot":{"run_id":"r","step":0}, "timeline":[{"run_id":"r","step":0}], "observations":[{}], "events":[], "decisions":[]}
+    changed_world = {**base, "world_manifest": {"world_hash":"fnv1a64:b", "seed":99}}
+    with pytest.raises(TrajectoryValidationError, match="manifests"):
+        check_reproducibility(base, changed_world)
+    changed_rewards = {**base, "reward_config": {"baseline_per_step":-2}}
+    with pytest.raises(TrajectoryValidationError, match="reward"):
+        check_reproducibility(base, changed_rewards)
 
 
 def test_replay_verifier_accepts_external_interrupt_without_a_simulation_step():

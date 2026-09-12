@@ -129,8 +129,18 @@ def replay_fingerprint(replay: dict[str, Any]) -> str:
 def check_reproducibility(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     if (left.get("scenario_id"),left.get("scenario_version"),left.get("seed")) != (right.get("scenario_id"),right.get("scenario_version"),right.get("seed")):
         raise TrajectoryValidationError("Replays must use the same scenario version and seed.")
+    for field in ("engine_version", "observation_mode", "max_steps"):
+        if left.get(field) != right.get(field):
+            raise TrajectoryValidationError(f"Replays must use the same {field}.")
+    if left.get("reward_config") != right.get("reward_config"):
+        raise TrajectoryValidationError("Replays must use the same reward configuration.")
+    left_manifest, right_manifest = left.get("world_manifest"), right.get("world_manifest")
+    if bool(left_manifest) != bool(right_manifest):
+        raise TrajectoryValidationError("Both replays must either include or omit a generated world manifest.")
+    if left_manifest is not None and left_manifest != right_manifest:
+        raise TrajectoryValidationError("Generated world manifests must match exactly.")
     left_hash,replay_hash=replay_fingerprint(left),replay_fingerprint(right)
-    return {"reproducible":left_hash==replay_hash,"left_fingerprint":left_hash,"right_fingerprint":replay_hash,"seed":left.get("seed"),"scenario_id":left.get("scenario_id")}
+    return {"reproducible":left_hash==replay_hash,"left_fingerprint":left_hash,"right_fingerprint":replay_hash,"seed":left.get("seed"),"scenario_id":left.get("scenario_id"),"world_kind":"generated" if left_manifest is not None else "catalog"}
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
