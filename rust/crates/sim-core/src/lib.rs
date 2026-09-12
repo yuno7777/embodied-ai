@@ -521,15 +521,30 @@ pub struct VisibleEntity {
     pub state: Option<String>,
     pub name: Option<String>,
 }
+/// Body state available to a policy through an observation.
+///
+/// Deliberately excludes identity, absolute position, and terminal/evaluator
+/// fields. Those belong to the authoritative world or researcher snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentObservation {
+    pub facing: Direction,
+    pub health: i32,
+    pub energy: i32,
+    pub hydration: i32,
+    pub inventory: Vec<String>,
+    pub max_inventory: usize,
+    pub max_inventory_weight: u32,
+    #[serde(default)]
+    pub status_effects: Vec<String>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Observation {
     pub protocol_version: u32,
     pub run_id: Uuid,
     pub step: u32,
     pub observation_mode: ObservationMode,
-    pub agent: Agent,
+    pub agent: AgentObservation,
     pub goal: String,
-    pub current_room_id: Option<String>,
     pub visible_cells: Vec<VisibleCell>,
     pub recent_events: Vec<String>,
     pub perception_note: Option<String>,
@@ -747,18 +762,6 @@ impl Environment {
             .map(|item| item.weight)
             .sum()
     }
-    fn current_room_id(&self) -> Option<String> {
-        self.scenario
-            .rooms
-            .iter()
-            .find(|room| {
-                self.agent.position.x >= room.min.x
-                    && self.agent.position.x <= room.max.x
-                    && self.agent.position.y >= room.min.y
-                    && self.agent.position.y <= room.max.y
-            })
-            .map(|room| room.id.clone())
-    }
     fn invalid(&mut self, key: String, msg: &str, out: &mut Vec<Event>) {
         self.invalid += 1;
         if self.last_invalid.as_ref() == Some(&key) {
@@ -865,7 +868,8 @@ impl Environment {
                     entities.push(VisibleEntity {
                         id: n.id.clone(),
                         kind: "npc".into(),
-                        state: Some(format!("{}; trust {}", n.disposition, n.trust)),
+                        // NPC trust is hidden internal state, not perception.
+                        state: Some(n.disposition.clone()),
                         name: None,
                     })
                 };
@@ -889,9 +893,17 @@ impl Environment {
             run_id: self.run_id,
             step: self.step,
             observation_mode: self.observation_mode,
-            agent: self.agent.clone(),
+            agent: AgentObservation {
+                facing: self.agent.facing,
+                health: self.agent.health,
+                energy: self.agent.energy,
+                hydration: self.agent.hydration,
+                inventory: self.agent.inventory.clone(),
+                max_inventory: self.agent.max_inventory,
+                max_inventory_weight: self.agent.max_inventory_weight,
+                status_effects: self.agent.status_effects.clone(),
+            },
             goal: self.scenario.goal.clone(),
-            current_room_id: self.current_room_id(),
             visible_cells: cells,
             recent_events: self
                 .events
@@ -1585,7 +1597,6 @@ mod tests {
     #[test]
     fn observation_hides_key() {
         let e = Environment::new(s(), 1).unwrap();
-        assert_eq!(e.observe().current_room_id.as_deref(), Some("test_room"));
         assert!(
             !e.observe()
                 .visible_cells
@@ -1593,6 +1604,26 @@ mod tests {
                 .flat_map(|c| &c.entities)
                 .any(|x| x.id == "k")
         )
+    }
+    #[test]
+    fn observation_excludes_researcher_coordinates_and_npc_trust() {
+        let mut scenario = s();
+        scenario.npc = Some(Npc {
+            id: "guide".into(),
+            position: scenario.spawn,
+            hint: "hello".into(),
+            disposition: "friendly".into(),
+            trust: 77,
+            dialogue: vec![],
+            patrol: vec![],
+            inventory: vec![],
+        });
+        let env = Environment::new(scenario, 21).unwrap();
+        let observation = serde_json::to_value(env.observe()).unwrap();
+        assert!(observation["agent"].get("position").is_none());
+        assert!(observation.get("current_room_id").is_none());
+        assert!(!observation.to_string().contains("trust 77"));
+        assert_eq!(env.snapshot().agent.position, env.agent.position);
     }
     #[test]
     fn discovery_metrics_only_record_entities_after_local_perception_reveals_them() {
@@ -2160,7 +2191,7 @@ mod tests {
                 .events
                 .iter()
                 .any(|event| event.kind == "InspectionCompleted"
-                    && event.message.contains("trust 11"))
+                    && event.message.contains("friendly"))
         );
     }
     #[test]
