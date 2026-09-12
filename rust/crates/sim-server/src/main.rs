@@ -167,13 +167,14 @@ impl Default for AppState {
 #[serde(deny_unknown_fields)]
 struct CreateRun {
     scenario_id: Option<String>,
+    generated_world: Option<GenerateWorld>,
     seed: Option<u64>,
     max_steps: Option<u32>,
     observation_mode: Option<ObservationMode>,
     #[serde(default)]
     controller: Controller,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct GenerateWorld {
     seed: u64,
@@ -422,17 +423,36 @@ async fn create(
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, String)> {
     let request = body.map(|body| body.0).unwrap_or(CreateRun {
         scenario_id: None,
+        generated_world: None,
         seed: None,
         max_steps: None,
         observation_mode: None,
         controller: Controller::Provider,
     });
-    let mut configured_scenario = match request.scenario_id.as_deref() {
-        Some(id) => scenario_catalog()
-            .into_iter()
-            .find(|configured| configured.id == id)
-            .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("unknown scenario: {id}")))?,
-        None => scenario(),
+    if request.scenario_id.is_some() && request.generated_world.is_some() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "choose either scenario_id or generated_world".into(),
+        ));
+    }
+    let generated_manifest = request
+        .generated_world
+        .as_ref()
+        .map(|generated| {
+            WorldGenerator::new(generated.config.clone())
+                .and_then(|generator| generator.generate(generated.seed))
+                .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))
+        })
+        .transpose()?;
+    let mut configured_scenario = match generated_manifest.as_ref() {
+        Some(manifest) => manifest.scenario.clone(),
+        None => match request.scenario_id.as_deref() {
+            Some(id) => scenario_catalog()
+                .into_iter()
+                .find(|configured| configured.id == id)
+                .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("unknown scenario: {id}")))?,
+            None => scenario(),
+        },
     };
     if let Some(max_steps) = request.max_steps {
         configured_scenario.max_steps = max_steps;
@@ -467,7 +487,9 @@ async fn create(
     ));
     Ok((
         StatusCode::CREATED,
-        Json(serde_json::json!({"run_id":id,"observation":observation,"snapshot":snapshot})),
+        Json(
+            serde_json::json!({"run_id":id,"observation":observation,"snapshot":snapshot,"world_manifest":generated_manifest}),
+        ),
     ))
 }
 async fn runs(State(state): State<AppState>) -> Json<Vec<WorldSnapshot>> {
@@ -1561,6 +1583,31 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(unknown_selection.status(), StatusCode::BAD_REQUEST);
+
+        let generated_run = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/runs")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"seed":7,"generated_world":{"seed":99}}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(generated_run.status(), StatusCode::CREATED);
+        let generated_run_body = axum::body::to_bytes(generated_run.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let generated_run_json =
+            serde_json::from_slice::<serde_json::Value>(&generated_run_body).unwrap();
+        assert_eq!(generated_run_json["world_manifest"]["seed"], 99);
+        assert!(
+            generated_run_json["world_manifest"]["validation"]["solvable"]
+                .as_bool()
+                .unwrap()
+        );
 
         let generated = app
             .clone()
