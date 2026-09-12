@@ -2,6 +2,8 @@
 
 Embodied Worlds is a local research platform for evaluating an AI policy inside a deterministic, partially observed simulated body. A provider proposes a single structured action. The authoritative engine validates it, changes the world, emits events, and returns only the observation the body may perceive.
 
+See [the research architecture and capability status](docs/research-architecture.md) for the authoritative system boundary, implemented capabilities, and explicit current limitations.
+
 ```mermaid
 flowchart LR
   P[Gemini or mock provider] -->|one validated Action| R[Rust simulation authority]
