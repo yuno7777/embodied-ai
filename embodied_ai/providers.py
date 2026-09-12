@@ -6,15 +6,23 @@ from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt,
 from .context import AgentContext, SYSTEM_PROMPT
 from .schemas import AgentDecision, ActionRequest
 
-class AgentProvider(Protocol):
+class Policy(Protocol):
     name: str
+    def reset(self, seed: int | None = None) -> None: ...
+    def act(self, observation: dict) -> ActionRequest: ...
+
+
+class AgentProvider(Policy, Protocol):
+    """Compatibility name for policies used by the existing runner."""
     def choose_action(self, observation: dict) -> ActionRequest: ...
 
 class ScriptedProvider:
     name = "scripted"
     """Deterministic success route; safe for tests and repeatable benchmarks."""
     route=[("move","east"),("move","east"),("move","east"),("move","north"),("move","north"),("open",None),("pickup",None),("move","south"),("move","south"),("move","south"),("move","east"),("move","east"),("open",None),("move","east"),("move","east"),("move","east"),("move","south"),("move","east"),("move","east"),("move","east"),("move","east"),("move","north"),("move","north"),("open",None),("move","east")]
-    def __init__(self): self.index=0
+    def __init__(self): self.reset()
+    def reset(self, seed: int | None = None) -> None: self.index=0
+    def act(self, observation: dict) -> ActionRequest: return self.choose_action(observation)
     def choose_action(self, observation: dict) -> ActionRequest:
         kind,direction=self.route[min(self.index,len(self.route)-1)]; self.index+=1
         target = "key_locker" if kind=="open" and self.index==6 else ("service_door" if kind=="open" and self.index==13 else ("exit_door" if kind=="open" else None))
@@ -22,7 +30,12 @@ class ScriptedProvider:
 
 class RandomValidProvider:
     name="random_valid"
-    def __init__(self, seed: int = 0): import random; self.random=random.Random(seed)
+    def __init__(self, seed: int = 0): self.seed=seed; self.reset(seed)
+    def reset(self, seed: int | None = None) -> None:
+        import random
+        self.seed = self.seed if seed is None else seed
+        self.random=random.Random(self.seed)
+    def act(self, observation: dict) -> ActionRequest: return self.choose_action(observation)
     def choose_action(self, observation: dict) -> ActionRequest:
         return ActionRequest(type="move", direction=self.random.choice(["north","south","east","west"]))
 
@@ -30,7 +43,9 @@ class ExplorerProvider:
     """Deterministic coverage baseline alternating local inspection and movement."""
     name = "explorer"
     directions = ("east", "north", "west", "south")
-    def __init__(self): self.turn = 0
+    def __init__(self): self.reset()
+    def reset(self, seed: int | None = None) -> None: self.turn = 0
+    def act(self, observation: dict) -> ActionRequest: return self.choose_action(observation)
     def choose_action(self, observation: dict) -> ActionRequest:
         self.turn += 1
         if self.turn % 5 == 1:
@@ -41,7 +56,9 @@ class CautiousProvider:
     """Deterministic baseline that avoids observed adjacent active hazards and walls."""
     name = "cautious"
     directions = (("east", (1, 0)), ("south", (0, 1)), ("north", (0, -1)), ("west", (-1, 0)))
-    def __init__(self): self.turn = 0
+    def __init__(self): self.reset()
+    def reset(self, seed: int | None = None) -> None: self.turn = 0
+    def act(self, observation: dict) -> ActionRequest: return self.choose_action(observation)
     def choose_action(self, observation: dict) -> ActionRequest:
         self.turn += 1
         if self.turn == 1:
@@ -73,6 +90,9 @@ class GeminiProvider:
         if not key: raise RuntimeError("ProviderUnavailable: GEMINI_API_KEY is not configured")
         from google import genai
         self.client=genai.Client(api_key=key)
+    def reset(self, seed: int | None = None) -> None:
+        self.last_token_usage = None
+        self.last_attempts = 0
     async def choose(self, observation: dict, context: AgentContext) -> tuple[AgentDecision, float]:
         schema=AgentDecision.model_json_schema(); prompt=json.dumps({"observation":observation,"memory":context.payload()})
         self.last_token_usage = None

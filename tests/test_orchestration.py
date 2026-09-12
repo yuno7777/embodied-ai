@@ -38,6 +38,17 @@ def test_random_provider_returns_allowed_action():
     action=RandomValidProvider(7).choose_action({})
     assert action.type=="move" and action.direction in {"north","south","east","west"}
 
+def test_baseline_policy_lifecycle_resets_deterministically():
+    explorer=ExplorerProvider()
+    assert explorer.act({}).type == "inspect"
+    assert explorer.act({}).type == "move"
+    explorer.reset()
+    assert explorer.act({}).type == "inspect"
+    random=RandomValidProvider(9)
+    first=random.act({})
+    random.reset(9)
+    assert random.act({}) == first
+
 def test_lightweight_policy_baselines_are_deterministic_and_hazard_aware():
     explorer=ExplorerProvider()
     assert [explorer.choose_action({}).type for _ in range(5)]==["inspect","move","move","move","move"]

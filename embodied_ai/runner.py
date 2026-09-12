@@ -39,6 +39,8 @@ class RustRunClient:
 def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None) -> RemoteRunResult:
     context=AgentContext(memory_mode=memory_mode, memory_window=memory_window); client=RustRunClient(base_url)
     try:
+        if hasattr(provider, "reset"):
+            provider.reset(seed)
         if max_wall_seconds is not None and max_wall_seconds <= 0: raise ValueError("max_wall_seconds must be positive")
         if max_total_tokens is not None and max_total_tokens <= 0: raise ValueError("max_total_tokens must be positive")
         if resume_run_id is not None and restore_replay_id is not None: raise ValueError("choose either a live run or a persisted replay to resume")
@@ -69,7 +71,7 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 if hasattr(provider, "choose"):
                     decision, provider_latency_ms=asyncio.run(provider.choose(observation,context)); action=decision.action; decision_summary=decision.decision_summary
                 else:
-                    action=provider.choose_action(observation)
+                    action=(provider.act(observation) if hasattr(provider, "act") else provider.choose_action(observation))
                     if not isinstance(action, ActionRequest):
                         action = ActionRequest.model_validate(action)
                     provider_latency_ms=0; decision_summary="provider action submitted to Rust authority"
