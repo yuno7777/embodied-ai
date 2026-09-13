@@ -39,7 +39,7 @@ def test_world_model_transitions_reject_mixed_run_provenance():
 
 def test_dataset_summary_reports_coverage_and_incomplete_privileged_pairs():
     report = summarize_world_model_dataset([
-        {"run_id": "a", "step": 1, "observation_mode": "normal", "policy_state_mode": "reset", "next_observation": {}, "chosen_action": {"type": "wait"}, "agent_metadata": {"confidence": .8, "planner": {"name": "astar"}}, "research_snapshot": {}, "next_research_snapshot": {}},
+        {"run_id": "a", "step": 1, "observation_mode": "normal", "policy_state_mode": "reset", "next_observation": {}, "chosen_action": {"type": "wait"}, "agent_metadata": {"confidence": .8, "planner": {"name": "astar"}}, "reward_breakdown": {"baseline": -1, "progress": 5, "invalid_action_penalty": 0, "hazard_penalty": 0, "terminal": 0}, "research_snapshot": {}, "next_research_snapshot": {}},
         {"run_id": "b", "step": 1, "observation_mode": "noisy", "policy_state_mode": "preserve", "chosen_action": {"type": "move"}, "done": True, "terminal_reason": "timeout", "research_snapshot": {}},
     ])
     assert report["runs"] == 2
@@ -52,6 +52,8 @@ def test_dataset_summary_reports_coverage_and_incomplete_privileged_pairs():
     assert report["agent_metadata_field_counts"] == {"confidence": 1, "planner": 1}
     assert report["planner_metadata_records"] == 1
     assert report["records_with_exact_next_observation"] == 1
+    assert report["records_with_reward_breakdown"] == 1
+    assert report["reward_component_totals"] == {"baseline": -1, "progress": 5, "invalid_action_penalty": 0, "hazard_penalty": 0, "terminal": 0}
     assert report["privileged_snapshot_pairs"] == 1
     assert report["partial_privileged_snapshot_records"] == 1
 

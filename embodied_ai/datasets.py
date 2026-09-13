@@ -55,6 +55,7 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
             # backward compatibility without corrupting new terminal steps.
             "observation_t_plus_1": record.get("next_observation", (next_record or record).get("observation")),
             "reward_t": record.get("reward"),
+            "reward_breakdown_t": record.get("reward_breakdown"),
             "terminated_t": bool(record.get("done")) and record.get("terminal_reason") not in {"timeout", "time_limit", "client_timeout", "token_budget_exhausted"},
             "truncated_t": bool(record.get("done")) and record.get("terminal_reason") in {"timeout", "time_limit", "client_timeout", "token_budget_exhausted"},
         }
@@ -100,6 +101,15 @@ def summarize_world_model_dataset(records: list[dict[str, Any]]) -> dict[str, An
     partial_snapshots = sum(
         ("research_snapshot" in record) != ("next_research_snapshot" in record) for record in records
     )
+    reward_breakdowns = [record["reward_breakdown"] for record in records if isinstance(record.get("reward_breakdown"), dict)]
+    reward_component_totals = {
+        component: sum(
+            breakdown.get(component, 0)
+            for breakdown in reward_breakdowns
+            if isinstance(breakdown.get(component, 0), int) and not isinstance(breakdown.get(component, 0), bool)
+        )
+        for component in ("baseline", "progress", "invalid_action_penalty", "hazard_penalty", "terminal")
+    }
     return {
         "records": len(records),
         "transitions": len(transitions),
@@ -113,6 +123,8 @@ def summarize_world_model_dataset(records: list[dict[str, Any]]) -> dict[str, An
         "agent_metadata_field_counts": dict(sorted(metadata_field_counts.items())),
         "planner_metadata_records": planner_metadata_records,
         "records_with_exact_next_observation": sum("next_observation" in record for record in records),
+        "records_with_reward_breakdown": len(reward_breakdowns),
+        "reward_component_totals": reward_component_totals,
         "privileged_snapshot_pairs": paired_snapshots,
         "partial_privileged_snapshot_records": partial_snapshots,
     }
