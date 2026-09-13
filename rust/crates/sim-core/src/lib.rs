@@ -823,6 +823,83 @@ impl Environment {
             }
         }
     }
+
+    /// Return cells perceptible from the body through local traversable space.
+    ///
+    /// A wall or closed door is itself visible when it borders an explored local
+    /// cell, but it blocks further propagation.  This intentionally avoids the
+    /// former radius-only view, which could reveal entities behind walls.
+    fn visible_positions(&self, radius: i32) -> BTreeMap<Pos, i32> {
+        let mut positions = BTreeMap::from([(self.agent.position, 0)]);
+        let mut frontier = vec![self.agent.position];
+        while let Some(position) = frontier.pop() {
+            let distance = positions[&position];
+            if distance >= radius {
+                continue;
+            }
+            for direction in [
+                Direction::North,
+                Direction::South,
+                Direction::East,
+                Direction::West,
+            ] {
+                let candidate = position.shifted(direction);
+                if !self.scenario.in_bounds(candidate) || positions.contains_key(&candidate) {
+                    continue;
+                }
+                let candidate_distance = distance + 1;
+                positions.insert(candidate, candidate_distance);
+                let blocks_sight = self.scenario.walls.contains(&candidate)
+                    && self.at_door(candidate).is_none_or(|door| !door.open);
+                if !blocks_sight {
+                    frontier.push(candidate);
+                }
+            }
+        }
+        positions
+    }
+
+    /// Agent observations contain consequences the body can perceive, not the
+    /// server-wide event log. Researcher snapshots retain every event.
+    fn event_is_locally_perceivable(kind: &str) -> bool {
+        matches!(
+            kind,
+            "ActionCompleted"
+                | "AgentDied"
+                | "AgentMoved"
+                | "AgentRested"
+                | "ContainerClosed"
+                | "ContainerOpened"
+                | "DehydrationDamage"
+                | "DoorClosed"
+                | "DoorOpened"
+                | "EntityDiscovered"
+                | "GoalCompleted"
+                | "HazardTriggered"
+                | "InspectionCompleted"
+                | "InvalidAction"
+                | "ItemConsumed"
+                | "ItemDropped"
+                | "ItemGiven"
+                | "ItemPickedUp"
+                | "NpcSpoke"
+                | "RunTimedOut"
+        )
+    }
+
+    fn recent_perceived_events(&self) -> Vec<String> {
+        let mut messages = self
+            .events
+            .iter()
+            .rev()
+            .filter(|event| Self::event_is_locally_perceivable(&event.kind))
+            .take(5)
+            .map(|event| event.message.clone())
+            .collect::<Vec<_>>();
+        messages.reverse();
+        messages
+    }
+
     pub fn observe(&self) -> Observation {
         let flashlight_bonus = self
             .scenario
@@ -838,91 +915,83 @@ impl Environment {
             ObservationMode::Rich => self.scenario.vision_radius + 1,
         } + flashlight_bonus;
         let mut cells = vec![];
-        for y in self.agent.position.y - r..=self.agent.position.y + r {
-            for x in self.agent.position.x - r..=self.agent.position.x + r {
-                let p = Pos { x, y };
-                if (x - self.agent.position.x).abs() + (y - self.agent.position.y).abs() > r
-                    || !self.scenario.in_bounds(p)
-                {
-                    continue;
-                };
-                let mut entities = vec![];
-                if let Some(d) = self.at_door(p) {
-                    entities.push(VisibleEntity {
-                        id: d.id.clone(),
-                        kind: "door".into(),
-                        state: Some(if d.open {
-                            "open".into()
-                        } else if d.locked {
-                            "locked".into()
-                        } else {
-                            "closed".into()
-                        }),
-                        name: None,
-                    })
-                };
-                for i in self.items_at(p) {
-                    entities.push(VisibleEntity {
-                        id: i.id.clone(),
-                        kind: "item".into(),
-                        state: None,
-                        name: Some(i.name.clone()),
-                    })
-                }
-                if let Some(c) = self.scenario.containers.iter().find(|c| c.position == p) {
-                    entities.push(VisibleEntity {
-                        id: c.id.clone(),
-                        kind: "container".into(),
-                        state: Some(if c.open {
-                            "open".into()
-                        } else {
-                            "closed".into()
-                        }),
-                        name: None,
-                    })
-                };
-                if let Some(h) = self
-                    .scenario
-                    .hazards
-                    .iter()
-                    .find(|h| h.position == p && h.active)
-                {
-                    entities.push(VisibleEntity {
-                        id: h.id.clone(),
-                        kind: "hazard".into(),
-                        state: Some(if h.active {
-                            "active".into()
-                        } else {
-                            "inactive".into()
-                        }),
-                        name: Some(h.kind.clone()),
-                    })
-                };
-                if let Some(n) = &self.scenario.npc
-                    && n.position == p
-                {
-                    entities.push(VisibleEntity {
-                        id: n.id.clone(),
-                        kind: "npc".into(),
-                        // NPC trust is hidden internal state, not perception.
-                        state: Some(n.disposition.clone()),
-                        name: None,
-                    })
-                };
-                let terrain = if self.scenario.walls.contains(&p) && self.at_door(p).is_none() {
-                    "wall"
-                } else {
-                    "floor"
-                };
-                cells.push(VisibleCell {
-                    relative_position: Pos {
-                        x: x - self.agent.position.x,
-                        y: y - self.agent.position.y,
-                    },
-                    terrain: terrain.into(),
-                    entities,
-                });
+        for (p, _) in self.visible_positions(r) {
+            let mut entities = vec![];
+            if let Some(d) = self.at_door(p) {
+                entities.push(VisibleEntity {
+                    id: d.id.clone(),
+                    kind: "door".into(),
+                    state: Some(if d.open {
+                        "open".into()
+                    } else if d.locked {
+                        "locked".into()
+                    } else {
+                        "closed".into()
+                    }),
+                    name: None,
+                })
+            };
+            for i in self.items_at(p) {
+                entities.push(VisibleEntity {
+                    id: i.id.clone(),
+                    kind: "item".into(),
+                    state: None,
+                    name: Some(i.name.clone()),
+                })
             }
+            if let Some(c) = self.scenario.containers.iter().find(|c| c.position == p) {
+                entities.push(VisibleEntity {
+                    id: c.id.clone(),
+                    kind: "container".into(),
+                    state: Some(if c.open {
+                        "open".into()
+                    } else {
+                        "closed".into()
+                    }),
+                    name: None,
+                })
+            };
+            if let Some(h) = self
+                .scenario
+                .hazards
+                .iter()
+                .find(|h| h.position == p && h.active)
+            {
+                entities.push(VisibleEntity {
+                    id: h.id.clone(),
+                    kind: "hazard".into(),
+                    state: Some(if h.active {
+                        "active".into()
+                    } else {
+                        "inactive".into()
+                    }),
+                    name: Some(h.kind.clone()),
+                })
+            };
+            if let Some(n) = &self.scenario.npc
+                && n.position == p
+            {
+                entities.push(VisibleEntity {
+                    id: n.id.clone(),
+                    kind: "npc".into(),
+                    // NPC trust is hidden internal state, not perception.
+                    state: Some(n.disposition.clone()),
+                    name: None,
+                })
+            };
+            let terrain = if self.scenario.walls.contains(&p) && self.at_door(p).is_none() {
+                "wall"
+            } else {
+                "floor"
+            };
+            cells.push(VisibleCell {
+                relative_position: Pos {
+                    x: p.x - self.agent.position.x,
+                    y: p.y - self.agent.position.y,
+                },
+                terrain: terrain.into(),
+                entities,
+            });
         }
         Observation {
             protocol_version: PROTOCOL_VERSION,
@@ -941,14 +1010,7 @@ impl Environment {
             },
             goal: self.scenario.goal.clone(),
             visible_cells: cells,
-            recent_events: self
-                .events
-                .iter()
-                .rev()
-                .take(5)
-                .rev()
-                .map(|e| e.message.clone())
-                .collect(),
+            recent_events: self.recent_perceived_events(),
             perception_note: (self.observation_mode == ObservationMode::Rich)
                 .then(|| "Extended local survey is enabled for this run.".into()),
             allowed_action_types: vec![
@@ -1641,6 +1703,65 @@ mod tests {
                 .flat_map(|c| &c.entities)
                 .any(|x| x.id == "k")
         )
+    }
+    #[test]
+    fn local_observation_does_not_reveal_entities_behind_walls() {
+        let mut scenario = s();
+        scenario.vision_radius = 3;
+        scenario.routes[0].waypoints = vec![scenario.spawn];
+        scenario.walls.push(Pos { x: 2, y: 2 });
+        let env = Environment::new(scenario, 1).unwrap();
+        let observation = env.observe();
+        assert!(
+            observation
+                .visible_cells
+                .iter()
+                .any(|cell| cell.relative_position == Pos { x: 1, y: 0 } && cell.terrain == "wall")
+        );
+        assert!(
+            !observation
+                .visible_cells
+                .iter()
+                .flat_map(|cell| &cell.entities)
+                .any(|entity| entity.id == "k")
+        );
+    }
+    #[test]
+    fn local_observation_excludes_global_perturbation_events() {
+        let mut scenario = s();
+        scenario.hazards.push(Hazard {
+            id: "remote_hazard".into(),
+            position: Pos { x: 3, y: 1 },
+            kind: "electrical".into(),
+            damage: 1,
+            energy_drain: 0,
+            hydration_drain: 0,
+            status_effect: None,
+            active: true,
+        });
+        scenario.perturbations.push(Perturbation {
+            id: "remote_change".into(),
+            step: 1,
+            effect: PerturbationEffect::DeactivateHazard,
+            target_id: "remote_hazard".into(),
+            destination: None,
+            probability_per_mille: 1000,
+        });
+        let mut env = Environment::new(scenario, 1).unwrap();
+        let result = env.step(Action::Wait);
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|event| event.kind == "PerturbationApplied")
+        );
+        assert!(
+            !result
+                .observation
+                .recent_events
+                .iter()
+                .any(|message| message.contains("remote_hazard"))
+        );
     }
     #[test]
     fn observation_excludes_researcher_coordinates_and_npc_trust() {
