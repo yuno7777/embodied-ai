@@ -15,7 +15,7 @@ flowchart LR
 
 ## Current V1
 
-The Survival Room has two connected rooms, a locked exit, key locker, food, water, an electrical hazard, an NPC, seeded deterministic ambient events, a seed-dependent service-door perturbation, and resource constraints. The Rust workspace contains the authoritative engine and Axum server source. The Python package provides mock providers, a Gemini adapter, compact episodic context, run orchestration, JSONL/Parquet output, and a repeatable benchmark CLI. The Next.js observer is a separate local process with a manual-control baseline.
+The Survival Room has two connected rooms, a locked exit, key locker, food, water, an electrical hazard, an NPC, seeded deterministic ambient events, a seed-dependent service-door perturbation, and resource constraints. Procedural worlds independently vary between validated two- and three-room corridor graphs. The Rust workspace contains the authoritative engine and Axum server source. The Python package provides mock providers, a Gemini adapter, compact episodic context, run orchestration, JSONL/Parquet output, and a repeatable benchmark CLI. The Next.js observer is a separate local process with a manual-control baseline.
 
 ## Prerequisites
 
