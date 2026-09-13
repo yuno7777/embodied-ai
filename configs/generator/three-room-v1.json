@@ -6,5 +6,6 @@
   "max_height": 9,
   "max_attempts": 16,
   "min_rooms": 3,
-  "max_rooms": 3
+  "max_rooms": 3,
+  "hazard_kinds": ["electrical"]
 }

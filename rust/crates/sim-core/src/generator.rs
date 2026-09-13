@@ -79,6 +79,8 @@ pub struct WorldGeneratorConfig {
     pub min_rooms: u8,
     #[serde(default = "default_max_rooms")]
     pub max_rooms: u8,
+    #[serde(default = "default_hazard_kinds")]
+    pub hazard_kinds: Vec<String>,
 }
 
 fn default_min_rooms() -> u8 {
@@ -87,6 +89,10 @@ fn default_min_rooms() -> u8 {
 
 fn default_max_rooms() -> u8 {
     3
+}
+
+fn default_hazard_kinds() -> Vec<String> {
+    vec!["electrical".into()]
 }
 
 impl Default for WorldGeneratorConfig {
@@ -100,6 +106,7 @@ impl Default for WorldGeneratorConfig {
             max_attempts: 16,
             min_rooms: default_min_rooms(),
             max_rooms: default_max_rooms(),
+            hazard_kinds: default_hazard_kinds(),
         }
     }
 }
@@ -119,12 +126,22 @@ impl WorldGeneratorConfig {
             || self.min_rooms < 2
             || self.max_rooms > 3
             || self.min_rooms > self.max_rooms
+            || self.hazard_kinds.is_empty()
         {
             return Err(SimError::Scenario("invalid world generator bounds".into()));
         }
         if self.max_rooms == 3 && self.min_width < 7 {
             return Err(SimError::Scenario(
                 "three-room worlds require a minimum width of 7".into(),
+            ));
+        }
+        if self
+            .hazard_kinds
+            .iter()
+            .any(|kind| !matches!(kind.as_str(), "electrical" | "fire" | "toxic_gas"))
+        {
+            return Err(SimError::Scenario(
+                "unsupported generated hazard kind".into(),
             ));
         }
         Ok(())
@@ -271,6 +288,15 @@ impl WorldGenerator {
             x: width - 1,
             y: middle_y,
         };
+        let selected_hazard =
+            self.config.hazard_kinds[rng.random_range(0..self.config.hazard_kinds.len())].as_str();
+        let (hazard_kind, damage, energy_drain, hydration_drain, status_effect) =
+            match selected_hazard {
+                "electrical" => ("electrical", 5, 1, 0, "shocked"),
+                "fire" => ("fire", 6, 0, 1, "burning"),
+                "toxic_gas" => ("toxic_gas", 3, 2, 2, "poisoned"),
+                _ => unreachable!("WorldGeneratorConfig validates hazard kinds"),
+            };
         let mut walls = border_walls(width, height);
         for divider_x in &divider_xs {
             walls.extend(
@@ -375,11 +401,11 @@ impl WorldGenerator {
             hazards: vec![Hazard {
                 id: "hazard".into(),
                 position: hazard_position,
-                kind: "electrical".into(),
-                damage: 5,
-                energy_drain: 1,
-                hydration_drain: 0,
-                status_effect: Some("shocked".into()),
+                kind: hazard_kind.into(),
+                damage,
+                energy_drain,
+                hydration_drain,
+                status_effect: Some(status_effect.into()),
                 active: true,
             }],
             npc: Some(Npc {
@@ -638,6 +664,31 @@ mod tests {
                 assert_eq!(world.generator_config.max_rooms, room_count);
             }
         }
+    }
+
+    #[test]
+    fn configured_hazard_family_is_deterministic_and_manifested() {
+        let config = WorldGeneratorConfig {
+            hazard_kinds: vec!["fire".into()],
+            ..WorldGeneratorConfig::default()
+        };
+        let world = WorldGenerator::new(config.clone())
+            .unwrap()
+            .generate(7)
+            .unwrap();
+        assert_eq!(world.generator_config.hazard_kinds, vec!["fire"]);
+        assert_eq!(world.scenario.hazards[0].kind, "fire");
+        assert_eq!(
+            world.scenario.hazards[0].status_effect.as_deref(),
+            Some("burning")
+        );
+        assert!(
+            WorldGenerator::new(WorldGeneratorConfig {
+                hazard_kinds: vec!["lava".into()],
+                ..config
+            })
+            .is_err()
+        );
     }
 
     #[test]

@@ -7,5 +7,5 @@
   "max_attempts": 16,
   "min_rooms": 2,
   "max_rooms": 3,
-  "hazard_kinds": ["electrical"]
+  "hazard_kinds": ["fire"]
 }
