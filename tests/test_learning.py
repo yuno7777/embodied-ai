@@ -42,6 +42,7 @@ def test_tabular_episodes_preserve_evaluator_metrics_without_policy_access():
     assert result["invalid_actions"] == 0
     assert result["exploration_coverage"] == .5
     assert result["resource_efficiency"] == .8
+    assert result["control_elapsed_ms"] >= 0
 
 
 def test_tabular_step_limits_keep_the_last_authoritative_evaluator_metrics():
