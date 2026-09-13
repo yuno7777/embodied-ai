@@ -78,6 +78,13 @@ def built_in_world_partition(seed: int) -> str | None:
     return None
 
 
+def generated_hazard_kinds(world_manifest: dict[str, Any] | None) -> list[str]:
+    """Extract actual generated mechanics for lightweight report stratification."""
+    scenario = world_manifest.get("scenario") if isinstance(world_manifest, dict) else None
+    hazards = scenario.get("hazards") if isinstance(scenario, dict) else None
+    return sorted({str(hazard.get("kind")) for hazard in hazards if isinstance(hazard, dict) and isinstance(hazard.get("kind"), str)}) if isinstance(hazards, list) else []
+
+
 def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize train/validation/test episodes and their held-out gap."""
     expected = {"train", "validation", "test"}
@@ -189,6 +196,7 @@ def evaluate_generalization_remote(
             "seed": seed,
             "run_id": result.run_id,
             "world_manifest": result.world_manifest,
+            "hazard_kinds": generated_hazard_kinds(result.world_manifest),
             "outcome": result.terminal_reason,
             "steps": result.steps,
             "total_reward": sum(record.get("reward", 0) for record in result.records if isinstance(record.get("reward", 0), (int, float))),

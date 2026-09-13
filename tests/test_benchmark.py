@@ -113,7 +113,7 @@ def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monk
             expected["partition"] = "train"
         assert kwargs["generated_world"] == expected
         record = {"reward": 4, "metrics": {"invalid_actions": 0, "exploration_coverage": .5, "resource_efficiency": .8}, "control_elapsed_ms": 10}
-        return RemoteRunResult(f"run-{seed}", "escaped" if seed == 1 else "timeout", 2, [record])
+        return RemoteRunResult(f"run-{seed}", "escaped" if seed == 1 else "timeout", 2, [record], world_manifest={"scenario": {"hazards": [{"kind": "fire"}]}})
     monkeypatch.setattr(benchmark, "run_remote", fake_run)
     plan = benchmark.GeneralizationPlan(
         benchmark.SeedPartition("train", (1,)),
@@ -124,6 +124,7 @@ def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monk
     assert report["world_distribution"] == {"train": [1], "validation": [2], "test": [3]}
     assert report["generalization_gap"]["train_minus_test_success_rate"] == 1.0
     assert all("world_manifest" in episode for episode in report["episode_results"])
+    assert all(episode["hazard_kinds"] == ["fire"] for episode in report["episode_results"])
     assert (tmp_path / "generalization_report.json").exists()
     assert (tmp_path / "generalization_episodes.jsonl").exists()
     manifest = tmp_path / report["experiment_manifest"]
