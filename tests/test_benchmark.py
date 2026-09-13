@@ -173,6 +173,25 @@ def test_generalization_rejects_incomplete_partition_generator_configs(tmp_path)
         raise AssertionError("incomplete partition configs were accepted")
 
 
+def test_generalization_records_a_nondefault_sensor_mode(monkeypatch, tmp_path):
+    requested = []
+    def fake_run(_provider, seed, _base_url, **kwargs):
+        requested.append(kwargs)
+        return RemoteRunResult(f"run-{seed}", "timeout", 1, [{"metrics": {}}])
+    monkeypatch.setattr(benchmark, "run_remote", fake_run)
+    plan = benchmark.GeneralizationPlan(
+        benchmark.SeedPartition("train", (0,)),
+        benchmark.SeedPartition("validation", (8000,)),
+        benchmark.SeedPartition("test", (9000,)),
+    )
+    report = benchmark.evaluate_generalization_remote(plan, tmp_path, "http://sim", observation_mode="noisy")
+    assert all(request["observation_mode"] == "noisy" for request in requested)
+    assert report["observation_mode"] == "noisy"
+    assert all(episode["observation_mode"] == "noisy" for episode in report["episode_results"])
+    manifest = json.loads((tmp_path / report["experiment_manifest"]).read_text())
+    assert manifest["observation_mode"] == "noisy"
+
+
 def test_parallel_scaling_records_each_requested_worker_level(monkeypatch, tmp_path):
     calls = []
     def fake_benchmark(runs, seed_start, output, base_url, provider_name, concurrency):

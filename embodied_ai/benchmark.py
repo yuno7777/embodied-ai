@@ -130,10 +130,13 @@ def evaluate_generalization_remote(
     concurrency: int = 1,
     generator_config: Mapping[str, Any] | None = None,
     generator_configs_by_partition: Mapping[str, Mapping[str, Any]] | None = None,
+    observation_mode: str = "normal",
 ) -> dict[str, Any]:
     """Evaluate a policy over disjoint procedural worlds and persist an exact report."""
     if concurrency < 1 or concurrency > 32:
         raise ValueError("concurrency must be between 1 and 32")
+    if observation_mode not in {"minimal", "normal", "rich", "noisy", "oracle"}:
+        raise ValueError("unsupported observation mode")
     if generator_config is not None and generator_configs_by_partition is not None:
         raise ValueError("choose either one generator config or configs by partition")
     expected_partitions = {"train", "validation", "test"}
@@ -152,7 +155,7 @@ def evaluate_generalization_remote(
         scenario_id="procedural",
         seed=plan.train.seeds[0],
         provider=provider_name,
-        observation_mode="normal",
+        observation_mode=observation_mode,
         memory_mode="none",
         memory_window=1,
         generator_version=1,
@@ -175,7 +178,10 @@ def evaluate_generalization_remote(
             generated_world["config"] = dict(selected_config)
         if built_in_world_partition(seed) == partition:
             generated_world["partition"] = partition
-        result = run_remote(provider_for(provider_name, seed), seed, base_url, generated_world=generated_world)
+        run_kwargs = {"generated_world": generated_world}
+        if observation_mode != "normal":
+            run_kwargs["observation_mode"] = observation_mode
+        result = run_remote(provider_for(provider_name, seed), seed, base_url, **run_kwargs)
         final = result.records[-1] if result.records else {}
         metrics = final.get("metrics", {}) if isinstance(final.get("metrics"), dict) else {}
         return {
@@ -191,6 +197,7 @@ def evaluate_generalization_remote(
             "resource_efficiency": metrics.get("resource_efficiency"),
             "control_elapsed_ms": final.get("control_elapsed_ms"),
             "generator_config": dict(selected_config) if selected_config is not None else None,
+            "observation_mode": observation_mode,
         }
 
     with ThreadPoolExecutor(max_workers=min(concurrency, len(jobs))) as executor:
@@ -202,6 +209,7 @@ def evaluate_generalization_remote(
         "experiment_fingerprint": manifest.fingerprint(),
         "provider": provider_name,
         "engine_version": "rust-v1",
+        "observation_mode": observation_mode,
         "world_distribution": plan.as_dict(),
         "generator_config": dict(generator_config) if generator_config is not None else None,
         "generator_configs_by_partition": partition_configs,

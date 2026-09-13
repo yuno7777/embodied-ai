@@ -89,3 +89,19 @@ def test_generalize_cli_forwards_per_partition_generator_configs(monkeypatch, tm
         "validation": {"min_rooms": 3, "max_rooms": 3},
         "test": {"min_rooms": 3, "max_rooms": 3},
     }
+
+
+def test_generalize_cli_forwards_a_nondefault_observation_mode(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(
+        cli,
+        "evaluate_generalization_remote",
+        lambda _plan, *_args, **kwargs: (captured.update(kwargs) or {"ok": True}),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["embodied-ai", "generalize", "--observation-mode", "noisy", "--server-url", "http://sim", "--output", str(tmp_path)],
+    )
+    cli.main()
+    assert captured["observation_mode"] == "noisy"
