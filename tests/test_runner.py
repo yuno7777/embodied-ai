@@ -1,4 +1,4 @@
-from embodied_ai.schemas import ActionRequest, Observation
+from embodied_ai.schemas import ActionRequest, Observation, WorldManifest
 from embodied_ai.schemas import AgentDecision
 from embodied_ai.runner import RustRunClient
 from embodied_ai import runner
@@ -104,6 +104,15 @@ def test_rust_client_validates_generated_world_manifest_before_orchestration():
     manifest["generator_config"]["unknown"] = True
     with pytest.raises(ValidationError, match="unknown"):
         RustRunClient._with_validated_observation(object.__new__(RustRunClient), {"world_manifest": manifest})
+
+
+def test_committed_world_manifest_schema_matches_canonical_python_model():
+    schema = json.loads((Path(__file__).parents[1] / "schemas" / "world-manifest.v1.json").read_text())
+    generated = WorldManifest.model_json_schema()
+    assert schema["additionalProperties"] == generated["additionalProperties"] is False
+    assert schema["required"] == generated["required"]
+    assert schema["properties"]["manifest_version"]["const"] == generated["properties"]["manifest_version"]["const"] == 1
+    assert schema["properties"]["world_hash"]["pattern"] == generated["properties"]["world_hash"]["pattern"]
 
 
 def test_authoritative_run_creation_sends_an_optional_max_step_override():

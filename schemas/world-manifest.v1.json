@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://embodied-worlds.local/schemas/world-manifest.v1.json",
+  "title": "WorldManifest",
+  "description": "Canonical v1 immutable generated-world identity emitted by Rust.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "manifest_version": { "type": "integer", "const": 1 },
+    "generator_version": { "type": "integer", "const": 1 },
+    "seed": { "type": "integer", "minimum": 0 },
+    "generator_config": { "$ref": "#/$defs/WorldGeneratorConfig" },
+    "world_hash": { "type": "string", "pattern": "^fnv1a64:[0-9a-f]+$" },
+    "dimensions": { "$ref": "#/$defs/Position" },
+    "generation_attempt": { "type": "integer", "minimum": 0 },
+    "validation": { "$ref": "#/$defs/WorldValidation" },
+    "scenario": { "type": "object" }
+  },
+  "required": ["manifest_version", "generator_version", "seed", "generator_config", "world_hash", "dimensions", "generation_attempt", "validation", "scenario"],
+  "$defs": {
+    "Position": {
+      "type": "object",
+      "properties": { "x": { "type": "integer" }, "y": { "type": "integer" } },
+      "required": ["x", "y"]
+    },
+    "WorldGeneratorConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generator_version": { "type": "integer", "const": 1 },
+        "min_width": { "type": "integer", "minimum": 5 },
+        "max_width": { "type": "integer", "minimum": 5 },
+        "min_height": { "type": "integer", "minimum": 5 },
+        "max_height": { "type": "integer", "minimum": 5 },
+        "max_attempts": { "type": "integer", "minimum": 1 },
+        "min_rooms": { "type": "integer", "minimum": 2, "maximum": 3 },
+        "max_rooms": { "type": "integer", "minimum": 2, "maximum": 3 },
+        "hazard_kinds": { "type": "array", "minItems": 1, "items": { "type": "string", "enum": ["electrical", "fire", "toxic_gas"] } }
+      },
+      "required": ["generator_version", "min_width", "max_width", "min_height", "max_height", "max_attempts", "min_rooms", "max_rooms", "hazard_kinds"]
+    },
+    "WorldValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "geometry_valid": { "type": "boolean" },
+        "spawn_valid": { "type": "boolean" },
+        "required_key_reachable": { "type": "boolean" },
+        "exit_reachable": { "type": "boolean" },
+        "solvable": { "type": "boolean" }
+      },
+      "required": ["geometry_valid", "spawn_valid", "required_key_reachable", "exit_reachable", "solvable"]
+    }
+  }
+}
