@@ -288,6 +288,25 @@ def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch)
     assert result.world_manifest == {"scenario": {"id": "procedural_17", "version": 1}}
 
 
+def test_trajectory_preserves_authoritative_reward_components_and_simulation_time(monkeypatch):
+    class Client:
+        def __init__(self, _base_url): pass
+        def create(self, *_args): return {"run_id": "r", "observation": {"allowed_action_types": ["wait"]}}
+        def scenarios(self): return [{"id": "survival_room", "version": 3}]
+        def status(self, _run_id): return {"done": False, "paused": False, "step": 0}
+        def record_decision(self, *_args): return {}
+        def step(self, _run_id, _action):
+            return {"step_number": 1, "simulation_time": 3, "observation": {"allowed_action_types": ["wait"]}, "events": [], "reward": 9, "reward_breakdown": {"baseline": -1, "progress": 5, "invalid_action_penalty": 0, "hazard_penalty": 0, "terminal": 5}, "done": True, "terminal_reason": "escaped", "metrics": {}}
+        def close(self): pass
+    class Provider:
+        name = "reward-audit"
+        def choose_action(self, _observation): return ActionRequest(type="wait")
+    monkeypatch.setattr(runner, "RustRunClient", Client)
+    record = runner.run_remote(Provider(), 7).records[0]
+    assert record["simulation_time"] == 3
+    assert record["reward_breakdown"] == {"baseline": -1, "progress": 5, "invalid_action_penalty": 0, "hazard_penalty": 0, "terminal": 5}
+
+
 def test_runner_makes_policy_state_lifecycle_explicit(monkeypatch):
     class Client:
         def __init__(self, _base_url): pass
