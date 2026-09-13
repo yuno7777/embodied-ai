@@ -128,7 +128,7 @@ Start the Rust server before either command. Rust events are persisted as replay
 
 `audit-generalization` performs that provenance check on one report and emits a compact receipt containing its experimental conditions, canonical generator-config fingerprints, split counts, and whether episode-level evidence was checked. It is local and read-only; use it before comparing, archiving, or sharing a report.
 
-Benchmark summaries report control wall-clock measurements separately from `simulation_steps_per_second`, which is derived from the Rust server's authoritative per-step simulation timings. Provider/model latency is therefore not presented as simulator throughput.
+Benchmark summaries report control wall-clock measurements and mean episode-initialization latency separately from `simulation_steps_per_second`, which is derived from the Rust server's authoritative per-step simulation timings. Initialization latency is local Rust HTTP/create overhead, not a simulator-throughput claim; provider/model latency is likewise not presented as simulator throughput.
 
 `scripted`, `mock_reasoning`, and `random_valid` require no API key. The Gemini adapter uses the official `google-genai` SDK, structured JSON output, timeouts and post-response Pydantic validation; it is intentionally opt-in.
 

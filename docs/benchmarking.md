@@ -40,7 +40,7 @@ Replay `control` statistics measure non-overlapping wall-clock intervals. New ru
 
 Agent context defaults to the five most recent actions. Set `--memory-window 1..100` on the run command, or use the observer's Memory window field, to change this bound. Observations retained by Python use the same bound; `memory_mode=none` still supplies no memory. Known facts remain independently capped at 12 in the provider payload. Policy-local state has a separate lifecycle: `--policy-state-mode reset` is the reproducible default, while `preserve` is an explicitly persisted option for a reused policy instance in a continual-memory experiment.
 
-The simulation core is benchmarked separately from HTTP, rendering and provider latency:
+Benchmark exports separately record episode initialization latency: the local Python-to-Rust `create` or replay-restore request, including local HTTP/serialization overhead. It is not engine execution time and is never folded into `simulation_steps_per_second`. The simulation core is benchmarked separately from HTTP, rendering and provider latency:
 
 ```powershell
 .\scripts\use-rust-env.ps1
