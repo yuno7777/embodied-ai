@@ -92,6 +92,16 @@ def generated_room_count(world_manifest: dict[str, Any] | None) -> int | None:
     return len(rooms) if isinstance(rooms, list) else None
 
 
+def stratified_success_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return an auditable binary-success slice with the same interval as a split."""
+    successes = sum(row.get("outcome") == "escaped" for row in rows)
+    return {
+        "episodes": len(rows),
+        "success_rate": successes / len(rows),
+        "success_rate_wilson_95": wilson_interval(successes, len(rows)),
+    }
+
+
 def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize train/validation/test episodes and their held-out gap."""
     expected = {"train", "validation", "test"}
@@ -133,11 +143,11 @@ def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "failure_reasons": dict(sorted(failure_reasons.items())),
             "steps_per_second": total_steps / (sum(elapsed) / 1000) if elapsed and sum(elapsed) > 0 else None,
             "hazard_kind_breakdown": {
-                kind: {"episodes": len(items), "success_rate": sum(item.get("outcome") == "escaped" for item in items) / len(items)}
+                kind: stratified_success_summary(items)
                 for kind, items in sorted(hazard_groups.items())
             },
             "room_count_breakdown": {
-                str(room_count): {"episodes": len(items), "success_rate": sum(item.get("outcome") == "escaped" for item in items) / len(items)}
+                str(room_count): stratified_success_summary(items)
                 for room_count, items in sorted(room_groups.items())
             },
         }

@@ -107,8 +107,12 @@ def test_generalization_summary_reports_held_out_gap_and_uncertainty():
     assert report["generalization_gap"]["train_minus_test_success_rate"] == 1.0
     assert len(report["partitions"]["test"]["success_rate_wilson_95"]) == 2
     assert report["partitions"]["validation"]["failure_reasons"] == {"hazard": 1}
-    assert report["partitions"]["train"]["hazard_kind_breakdown"] == {"electrical": {"episodes": 1, "success_rate": 1.0}}
-    assert report["partitions"]["validation"]["room_count_breakdown"] == {"3": {"episodes": 1, "success_rate": 0.0}}
+    hazard_slice = report["partitions"]["train"]["hazard_kind_breakdown"]["electrical"]
+    assert hazard_slice["episodes"] == 1 and hazard_slice["success_rate"] == 1.0
+    assert len(hazard_slice["success_rate_wilson_95"]) == 2
+    topology_slice = report["partitions"]["validation"]["room_count_breakdown"]["3"]
+    assert topology_slice["episodes"] == 1 and topology_slice["success_rate"] == 0.0
+    assert len(topology_slice["success_rate_wilson_95"]) == 2
 
 
 def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):
