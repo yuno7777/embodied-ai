@@ -6,7 +6,7 @@ from typing import Any
 from dataclasses import dataclass, field
 import httpx
 from .context import AgentContext
-from .schemas import ActionResult, AgentDecision, ActionRequest, Observation, RewardConfig, WorldManifest
+from .schemas import ActionResult, AgentDecision, ActionRequest, EpisodeState, Observation, RewardConfig, WorldManifest
 
 @dataclass
 class RemoteRunResult:
@@ -49,7 +49,7 @@ class RustRunClient:
     def scenarios(self) -> list[dict]: return self.client.get("/api/scenarios").raise_for_status().json()
     def world_partition(self, seed: int) -> str: return self.client.get(f"/api/worlds/partition/{seed}").raise_for_status().json()
     def snapshot(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}").raise_for_status().json()
-    def status(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/status").raise_for_status().json()
+    def status(self, run_id: str) -> dict: return EpisodeState.model_validate(self.client.get(f"/api/runs/{run_id}/status").raise_for_status().json()).model_dump(mode="json")
     def observation(self, run_id: str) -> dict: return self._validate_observation(self.client.get(f"/api/runs/{run_id}/observation").raise_for_status().json())
     def replay(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/replay").raise_for_status().json()
     def restore(self, replay_id: str) -> dict: return self._with_validated_observation(self.client.post(f"/api/replays/{replay_id}/resume").raise_for_status().json())

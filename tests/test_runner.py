@@ -1,4 +1,4 @@
-from embodied_ai.schemas import ActionRequest, ActionResult, Observation, RewardConfig, WorldManifest
+from embodied_ai.schemas import ActionRequest, ActionResult, EpisodeState, Observation, RewardConfig, WorldManifest
 from embodied_ai.schemas import AgentDecision
 from embodied_ai.runner import RustRunClient
 from embodied_ai import runner
@@ -90,6 +90,22 @@ def test_rust_client_validates_observation_responses_before_policy_use():
     client.client = Client()
     with pytest.raises(ValidationError):
         client.observation("r")
+
+
+def test_rust_client_validates_authoritative_episode_status_before_control_use():
+    class Response:
+        def raise_for_status(self): return self
+        def json(self): return {"paused": False, "done": True, "terminal_reason": "escaped", "step": 4}
+    class Client:
+        def get(self, path):
+            assert path == "/api/runs/r/status"; return Response()
+    client = object.__new__(RustRunClient)
+    client.client = Client()
+    assert client.status("r") == {"paused": False, "done": True, "terminal_reason": "escaped", "step": 4}
+    with pytest.raises(ValidationError, match="terminal_reason"):
+        EpisodeState.model_validate({"paused": False, "done": True, "step": 4})
+    with pytest.raises(ValidationError, match="research_snapshot"):
+        EpisodeState.model_validate({"paused": False, "done": False, "step": 4, "research_snapshot": {}})
 
 
 def test_rust_client_validates_generated_world_manifest_before_orchestration():

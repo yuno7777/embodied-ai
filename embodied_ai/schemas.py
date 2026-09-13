@@ -193,6 +193,21 @@ class ActionResult(BaseModel):
         return self
 
 
+class EpisodeState(BaseModel):
+    """Minimal authoritative control state for an active or completed episode."""
+    model_config = ConfigDict(extra="forbid")
+    paused: bool
+    done: bool
+    terminal_reason: str | None = None
+    step: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_terminal_state(self) -> "EpisodeState":
+        if self.done != (self.terminal_reason is not None):
+            raise ValueError("terminal_reason must be present exactly when done")
+        return self
+
+
 class ActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: ActionType
