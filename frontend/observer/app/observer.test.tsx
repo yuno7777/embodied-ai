@@ -83,10 +83,11 @@ describe("Observer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start manual" }));
     await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
     MockWebSocket.instances[0].open();
-    MockWebSocket.instances[0].message({ type: "agent_decision", decision: { step: 1, action: { type: "wait" }, decision_summary: "Pausing to assess the room.", provider: "scripted", latency_ms: 0 }, result: { events: [{ message: "The body waited." }], observation } });
+    MockWebSocket.instances[0].message({ type: "agent_decision", decision: { step: 1, action: { type: "wait" }, decision_summary: "Pausing to assess the room.", provider: "scripted", latency_ms: 0, agent_metadata: { confidence: .8, value_estimate: 2, policy_entropy: .1, planner: { name: "astar", expanded_nodes: 12, planning_time_ms: 3 } } }, result: { events: [{ message: "The body waited." }], observation } });
     await waitFor(() => expect(screen.getByText("LIVE LINK: connected")).toBeInTheDocument());
     expect(screen.getByText("The body waited.")).toBeInTheDocument();
     expect(screen.getByText("Pausing to assess the room.")).toBeInTheDocument();
+    expect(screen.getByText(/POLICY TELEMETRY.*confidence 0.8.*planner astar/)).toBeInTheDocument();
     expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("visible_door");
   });
 
