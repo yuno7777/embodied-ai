@@ -261,6 +261,9 @@ struct ControlStats {
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Replay {
+    /// Schema version for durable replay files and the replay HTTP response.
+    #[serde(default = "default_replay_version")]
+    replay_version: u32,
     #[serde(default)]
     seed: u64,
     #[serde(default)]
@@ -290,6 +293,12 @@ struct Replay {
     actions: Vec<Action>,
     #[serde(default)]
     control: ControlStats,
+}
+
+const REPLAY_VERSION: u32 = 1;
+
+fn default_replay_version() -> u32 {
+    REPLAY_VERSION
 }
 
 struct PersistenceInput<'a> {
@@ -330,6 +339,7 @@ fn replay_for(
     control: ControlStats,
 ) -> Replay {
     Replay {
+        replay_version: REPLAY_VERSION,
         seed: env.seed,
         scenario_id: env.scenario.id.clone(),
         scenario_version: env.scenario.version,
@@ -678,6 +688,7 @@ async fn replay(
     State(state): State<AppState>,
 ) -> Result<Json<Replay>, StatusCode> {
     let current = state.runs.lock().await.get(&id).map(|r| Replay {
+        replay_version: REPLAY_VERSION,
         seed: r.env.seed,
         scenario_id: r.env.scenario.id.clone(),
         scenario_version: r.env.scenario.version,
@@ -1609,6 +1620,7 @@ mod tests {
             .await
             .unwrap();
         let replay_json = serde_json::from_slice::<serde_json::Value>(&replay_body).unwrap();
+        assert_eq!(replay_json["replay_version"], 1);
         assert_eq!(replay_json["seed"], 42);
         assert_eq!(replay_json["scenario_id"], "survival_room");
         assert_eq!(replay_json["scenario_version"], 5);
@@ -2015,6 +2027,7 @@ mod tests {
         let replay_json: serde_json::Value = serde_json::from_slice(&replay_body).unwrap();
         assert_eq!(replay_json["actions"].as_array().unwrap().len(), 1);
         assert_eq!(replay_json["timeline"].as_array().unwrap().len(), 2);
+        assert_eq!(replay_json["replay_version"], 1);
     }
 
     #[tokio::test]
