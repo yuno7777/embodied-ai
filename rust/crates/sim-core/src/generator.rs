@@ -208,29 +208,60 @@ impl WorldGenerator {
             room_start = *divider_x + 1;
         }
         room_spans.push((room_start, width - 2));
+        let spawn = random_position_in_span(&mut rng, room_spans[0], height);
         let key_room = rng.random_range(0..room_spans.len());
-        let (key_min_x, key_max_x) = room_spans[key_room];
-        let key_position = Pos {
-            x: rng.random_range(key_min_x..=key_max_x),
-            y: rng.random_range(1..height - 1),
+        let key_position = loop {
+            let position = random_position_in_span(&mut rng, room_spans[key_room], height);
+            if position != spawn {
+                break position;
+            }
+        };
+        let supply_position = loop {
+            let position = random_position_in_span(&mut rng, room_spans[0], height);
+            if position != spawn && position != key_position {
+                break position;
+            }
         };
         let hazard_position = loop {
             let position = Pos {
                 x: rng.random_range(1..width - 1),
                 y: rng.random_range(1..height - 1),
             };
-            if position != key_position
+            if position != spawn
+                && position != key_position
+                && position != supply_position
                 && position.y != middle_y
                 && !divider_xs.contains(&position.x)
             {
                 break position;
             }
         };
-        let supply_position = Pos {
-            x: 1,
-            y: (middle_y + 1).min(height - 2),
+        let water_position = loop {
+            let room = rng.random_range(0..room_spans.len());
+            let position = random_position_in_span(&mut rng, room_spans[room], height);
+            if position != spawn
+                && position != key_position
+                && position != supply_position
+                && position != hazard_position
+            {
+                break position;
+            }
         };
-        let spawn = Pos { x: 1, y: middle_y };
+        let npc_position = loop {
+            let position = random_position_in_span(
+                &mut rng,
+                *room_spans.last().expect("at least one generated room"),
+                height,
+            );
+            if position != spawn
+                && position != key_position
+                && position != supply_position
+                && position != hazard_position
+                && position != water_position
+            {
+                break position;
+            }
+        };
         let exit = Pos {
             x: width - 1,
             y: middle_y,
@@ -325,7 +356,7 @@ impl WorldGenerator {
                     id: "water".into(),
                     name: "Water flask".into(),
                     kind: "water".into(),
-                    position: supply_position,
+                    position: water_position,
                     energy: 0,
                     hydration: 20,
                     health: 0,
@@ -348,10 +379,7 @@ impl WorldGenerator {
             }],
             npc: Some(Npc {
                 id: "guide".into(),
-                position: Pos {
-                    x: width - 2,
-                    y: (middle_y + 1).min(height - 2),
-                },
+                position: npc_position,
                 hint: "An exit key opens the marked exit.".into(),
                 disposition: "neutral".into(),
                 trust: 0,
@@ -361,10 +389,7 @@ impl WorldGenerator {
             }),
             containers: vec![Container {
                 id: "supply_case".into(),
-                position: Pos {
-                    x: 1,
-                    y: (middle_y + 1).min(height - 2),
-                },
+                position: supply_position,
                 open: true,
                 locked: false,
                 key_id: None,
@@ -398,6 +423,13 @@ fn border_walls(width: i32, height: i32) -> Vec<Pos> {
         walls.insert(Pos { x: width - 1, y });
     }
     walls.into_iter().collect()
+}
+
+fn random_position_in_span(rng: &mut StdRng, span: (i32, i32), height: i32) -> Pos {
+    Pos {
+        x: rng.random_range(span.0..=span.1),
+        y: rng.random_range(1..height - 1),
+    }
 }
 
 pub fn validate_generated_world(scenario: &Scenario) -> WorldValidation {
@@ -546,6 +578,43 @@ mod tests {
             .map(|seed| generator.generate(seed).unwrap().scenario.rooms.len())
             .collect::<BTreeSet<_>>();
         assert_eq!(room_counts, BTreeSet::from([2, 3]));
+    }
+
+    #[test]
+    fn generated_worlds_vary_entity_placements_without_colliding_critical_entities() {
+        let generator = WorldGenerator::new(WorldGeneratorConfig::default()).unwrap();
+        let worlds = (0..32)
+            .map(|seed| generator.generate(seed).unwrap().scenario)
+            .collect::<Vec<_>>();
+        let spawns = worlds
+            .iter()
+            .map(|world| world.spawn)
+            .collect::<BTreeSet<_>>();
+        let supply_positions = worlds
+            .iter()
+            .map(|world| world.containers[0].position)
+            .collect::<BTreeSet<_>>();
+        let npc_positions = worlds
+            .iter()
+            .map(|world| world.npc.as_ref().unwrap().position)
+            .collect::<BTreeSet<_>>();
+        assert!(spawns.len() > 1);
+        assert!(supply_positions.len() > 1);
+        assert!(npc_positions.len() > 1);
+        for world in worlds {
+            let positions = [
+                world.spawn,
+                world.items[0].position,
+                world.items[1].position,
+                world.hazards[0].position,
+                world.containers[0].position,
+                world.npc.as_ref().unwrap().position,
+            ];
+            assert_eq!(
+                positions.len(),
+                positions.into_iter().collect::<BTreeSet<_>>().len()
+            );
+        }
     }
 
     #[test]
