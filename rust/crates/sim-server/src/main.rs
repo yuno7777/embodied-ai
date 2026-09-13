@@ -2206,6 +2206,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn unknown_generator_config_fields_are_rejected_at_the_http_boundary() {
+        let response = app(AppState::default())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/worlds/generate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"seed":42,"config":{"generator_version":1,"min_width":9,"max_width":11,"min_height":7,"max_height":9,"max_attempts":16,"min_rooms":2,"max_rooms":3,"hazard_kinds":["electrical"],"min_wdith":9}}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
     async fn provider_error_persists_a_terminal_partial_run() {
         let app = app(AppState::default());
         let created = app

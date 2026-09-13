@@ -66,6 +66,7 @@ impl WorldDistribution {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct WorldGeneratorConfig {
     pub generator_version: u32,
     pub min_width: i32,
@@ -703,6 +704,23 @@ mod tests {
                 .is_err()
             );
         }
+    }
+
+    #[test]
+    fn generator_config_rejects_unknown_serialized_fields() {
+        let config = serde_json::json!({
+            "generator_version": 1,
+            "min_width": 9,
+            "max_width": 11,
+            "min_height": 7,
+            "max_height": 9,
+            "max_attempts": 16,
+            "min_rooms": 2,
+            "max_rooms": 3,
+            "hazard_kinds": ["electrical"],
+            "min_wdith": 9
+        });
+        assert!(serde_json::from_value::<WorldGeneratorConfig>(config).is_err());
     }
 
     #[test]
