@@ -10,4 +10,6 @@ data/local-processes/
 data/browser-smoke/
 data/runs/*
 !data/runs/.gitkeep
+data/checkpoints/
+data/exports/
 rust/crates/data/runs/
