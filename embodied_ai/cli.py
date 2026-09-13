@@ -3,7 +3,7 @@ import argparse, json
 from pathlib import Path
 from .analysis import check_reproducibility, filter_trajectory, load_jsonl, summarize_trajectory, verify_replay
 from .benchmark import GeneralizationPlan, SeedPartition, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, evaluate_generalization_remote
-from .datasets import export_csv, export_jsonl, export_parquet
+from .datasets import export_csv, export_jsonl, export_parquet, summarize_world_model_dataset
 from .experiments import ExperimentManifest
 from .environment import EmbodiedEnv, EmbodiedEnvConfig
 from .learning import TabularQConfig, TabularQPolicy, evaluate_tabular_q, train_tabular_q
@@ -38,6 +38,7 @@ def main():
     c=sub.add_parser('analyze'); c.add_argument('--trajectory',type=Path,required=True); c.add_argument('--output',type=Path)
     d=sub.add_parser('compare'); d.add_argument('--left',type=Path,required=True); d.add_argument('--right',type=Path,required=True); d.add_argument('--output',type=Path)
     e=sub.add_parser('filter'); e.add_argument('--trajectory',type=Path,required=True); e.add_argument('--output',type=Path,required=True); e.add_argument('--action-type'); e.add_argument('--event-type'); e.add_argument('--valid-only',action='store_true'); e.add_argument('--csv',action='store_true')
+    dataset_audit=sub.add_parser('audit-dataset'); dataset_audit.add_argument('--trajectory',type=Path,required=True); dataset_audit.add_argument('--output',type=Path)
     f=sub.add_parser('verify-replay'); f.add_argument('--replay',type=Path,required=True)
     g=sub.add_parser('check-reproducibility'); g.add_argument('--left',type=Path,required=True); g.add_argument('--right',type=Path,required=True)
     args=p.parse_args()
@@ -132,6 +133,13 @@ def main():
         if args.csv: export_csv([{**record,"chosen_action":json.dumps(record.get("chosen_action")),"events":json.dumps(record.get("events")),"observation":json.dumps(record.get("observation")),"metrics":json.dumps(record.get("metrics"))} for record in records],args.output)
         else: export_jsonl(records,args.output)
         print(json.dumps({"records":len(records),"output":str(args.output)}))
+    elif args.cmd=='audit-dataset':
+        try:
+            report=summarize_world_model_dataset(load_jsonl(args.trajectory))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            p.error(str(error))
+        if args.output: args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(json.dumps(report,indent=2),encoding='utf-8')
+        print(json.dumps(report,indent=2))
     elif args.cmd=='verify-replay':
         print(json.dumps(verify_replay(json.loads(args.replay.read_text(encoding='utf-8'))),indent=2))
     elif args.cmd=='check-reproducibility':

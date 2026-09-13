@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 import pandas as pd
@@ -64,3 +65,36 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
             )
         transitions.append(transition)
     return transitions
+
+
+def summarize_world_model_dataset(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Report lightweight completeness and coverage facts for exported transitions."""
+    transitions = world_model_transitions(records)
+    action_counts = Counter(
+        str(record.get("chosen_action", {}).get("type", "unknown"))
+        for record in records
+        if isinstance(record.get("chosen_action"), dict)
+    )
+    terminal_reasons = Counter(
+        str(record.get("terminal_reason"))
+        for record in records
+        if record.get("done") and record.get("terminal_reason") is not None
+    )
+    observation_modes = Counter(str(record.get("observation_mode", "unknown")) for record in records)
+    paired_snapshots = sum(
+        "research_snapshot" in record and "next_research_snapshot" in record for record in records
+    )
+    partial_snapshots = sum(
+        ("research_snapshot" in record) != ("next_research_snapshot" in record) for record in records
+    )
+    return {
+        "records": len(records),
+        "transitions": len(transitions),
+        "runs": len({record.get("run_id") for record in records if record.get("run_id") is not None}),
+        "action_counts": dict(sorted(action_counts.items())),
+        "terminal_reasons": dict(sorted(terminal_reasons.items())),
+        "observation_modes": dict(sorted(observation_modes.items())),
+        "records_with_exact_next_observation": sum("next_observation" in record for record in records),
+        "privileged_snapshot_pairs": paired_snapshots,
+        "partial_privileged_snapshot_records": partial_snapshots,
+    }

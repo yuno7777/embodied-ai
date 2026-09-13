@@ -57,6 +57,21 @@ def test_run_cli_requires_an_explicit_flag_for_privileged_research_snapshots(mon
     assert captured["include_research_snapshots"] is True
 
 
+def test_audit_dataset_cli_reports_local_transition_coverage(monkeypatch, tmp_path, capsys):
+    trajectory = tmp_path / "run.jsonl"
+    trajectory.write_text('{"run_id":"r","step":1,"chosen_action":{"type":"wait"},"next_observation":{}}\n', encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "audit-dataset", "--trajectory", str(trajectory)])
+    cli.main()
+    assert '"transitions": 1' in capsys.readouterr().out
+
+
+def test_audit_dataset_cli_reports_a_missing_trajectory_as_a_usage_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "audit-dataset", "--trajectory", str(tmp_path / "missing.jsonl")])
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 2
+
+
 def test_generalize_cli_defaults_match_authoritative_seed_partitions(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setattr(

@@ -1,4 +1,4 @@
-from embodied_ai.datasets import world_model_transitions
+from embodied_ai.datasets import summarize_world_model_dataset, world_model_transitions
 
 
 def test_world_model_transitions_preserve_episode_boundaries_and_policy_observations():
@@ -35,3 +35,17 @@ def test_world_model_transitions_reject_mixed_run_provenance():
         assert "mixed" in str(error)
     else:
         raise AssertionError("mixed experiment provenance was accepted")
+
+
+def test_dataset_summary_reports_coverage_and_incomplete_privileged_pairs():
+    report = summarize_world_model_dataset([
+        {"run_id": "a", "step": 1, "observation_mode": "normal", "next_observation": {}, "chosen_action": {"type": "wait"}, "research_snapshot": {}, "next_research_snapshot": {}},
+        {"run_id": "b", "step": 1, "observation_mode": "noisy", "chosen_action": {"type": "move"}, "done": True, "terminal_reason": "timeout", "research_snapshot": {}},
+    ])
+    assert report["runs"] == 2
+    assert report["action_counts"] == {"move": 1, "wait": 1}
+    assert report["terminal_reasons"] == {"timeout": 1}
+    assert report["observation_modes"] == {"noisy": 1, "normal": 1}
+    assert report["records_with_exact_next_observation"] == 1
+    assert report["privileged_snapshot_pairs"] == 1
+    assert report["partial_privileged_snapshot_records"] == 1
