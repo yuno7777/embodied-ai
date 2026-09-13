@@ -150,6 +150,7 @@ def evaluate_generalization_remote(
             "partition": partition,
             "seed": seed,
             "run_id": result.run_id,
+            "world_manifest": result.world_manifest,
             "outcome": result.terminal_reason,
             "steps": result.steps,
             "total_reward": sum(record.get("reward", 0) for record in result.records if isinstance(record.get("reward", 0), (int, float))),

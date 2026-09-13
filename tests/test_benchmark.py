@@ -100,6 +100,7 @@ def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monk
     report = benchmark.evaluate_generalization_remote(plan, tmp_path, "http://sim", generator_config={"min_width": 9, "max_width": 9})
     assert report["world_distribution"] == {"train": [1], "validation": [2], "test": [3]}
     assert report["generalization_gap"]["train_minus_test_success_rate"] == 1.0
+    assert all("world_manifest" in episode for episode in report["episode_results"])
     assert (tmp_path / "generalization_report.json").exists()
     assert (tmp_path / "generalization_episodes.jsonl").exists()
     manifest = tmp_path / report["experiment_manifest"]
