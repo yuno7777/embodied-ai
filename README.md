@@ -138,6 +138,19 @@ Benchmark summaries report control wall-clock measurements and mean episode-init
 
 `train-tabular` is a small infrastructure-validation RL baseline. It learns a tabular Q-function from the selected public observation mode, submits every action to Rust, and saves a reloadable JSON checkpoint. It proposes open/pickup actions only for locally reachable public entities and `use_item` only for public carried-item IDs. Train and evaluation each persist an immutable experiment manifest beside that checkpoint, recording the observation mode, procedural generator config, seed start, episode count, and tabular hyperparameters where applicable. Use matching `--observation-mode` and `--generator-config` values for straightforward train/test comparisons; intentionally different values are perception/layout-shift experiments and should be labeled as such. It is intentionally not a claim of competitive agent performance.
 
+Custom policies can use the headless adapter directly. `distribution` is a named Rust-generated-world partition; it is not a Python-side scenario selector. `world_partition` remains a compatible alias for existing callers.
+
+```python
+from embodied_ai.environment import EmbodiedEnv, EmbodiedEnvConfig
+
+with EmbodiedEnv(EmbodiedEnvConfig(distribution="train", observation_mode="normal")) as env:
+    observation, info = env.reset(seed=123)
+    while True:
+        observation, reward, terminated, truncated, info = env.step(policy.act(observation))
+        if terminated or truncated:
+            break
+```
+
 `generalize-tabular` trains once on an explicit procedural train split, freezes the checkpoint, then evaluates that same policy over train, validation, and test splits. It writes an immutable manifest, per-episode JSONL, and a held-out-gap report with authoritative invalid-action, exploration, resource-efficiency, and local rollout-throughput metrics. It is a lifecycle and generalization measurement tool, not a performance claim.
 
 If an in-run provider call exhausts its retries, the runner marks the authoritative run as `provider_error`, persists the partial replay, and returns a clean terminal result instead of leaving an active run behind.
