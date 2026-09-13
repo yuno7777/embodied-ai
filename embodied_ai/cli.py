@@ -49,6 +49,8 @@ def main():
         scenario_id=args.scenario or (None if generated_world else 'survival_room')
         manifest=ExperimentManifest(scenario_id=scenario_id or 'procedural',seed=args.seed,provider=args.provider,model=args.model,observation_mode=args.observation_mode,memory_mode=args.memory_mode,memory_window=args.memory_window,max_steps=args.max_steps,max_wall_seconds=args.max_wall_seconds,max_total_tokens=args.max_total_tokens,generator_version=1 if generated_world else None,generated_world=generated_world)
         result=run_remote(provider_for(args.provider,args.seed,args.model),args.seed,args.server_url,args.memory_mode,args.max_steps,args.observation_mode,max_wall_seconds=args.max_wall_seconds,max_total_tokens=args.max_total_tokens,resume_run_id=args.resume_run_id,restore_replay_id=args.restore_replay_id,memory_window=args.memory_window,scenario_id=scenario_id,generated_world=generated_world,experiment_id=manifest.experiment_id)
+        if result.world_manifest is not None:
+            manifest=manifest.model_copy(update={"generated_world":result.world_manifest})
         manifest_path=manifest.persist(directory)
         jsonl=export_jsonl(result.records,directory/f'{result.run_id}.jsonl')
         export_parquet([{**record,"observation":json.dumps(record["observation"]),"agent_context":json.dumps(record["agent_context"]),"events":json.dumps(record["events"]),"chosen_action":json.dumps(record["chosen_action"]),"metrics":json.dumps(record["metrics"])} for record in result.records],directory/f'{result.run_id}.parquet')
