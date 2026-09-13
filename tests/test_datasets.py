@@ -21,3 +21,16 @@ def test_world_model_transitions_require_explicit_privileged_opt_in():
     records = [{"run_id": "a", "step": 1, "observation": {}, "chosen_action": {"type": "wait"}, "research_snapshot": {"secret": True}}]
     transition = world_model_transitions(records, include_privileged_state=True)[0]
     assert transition["privileged_state_t"] == {"secret": True}
+
+
+def test_world_model_transitions_reject_mixed_run_provenance():
+    records = [
+        {"run_id": "a", "step": 1, "experiment_id": "one", "observation": {}, "chosen_action": {"type": "wait"}},
+        {"run_id": "a", "step": 2, "experiment_id": "two", "observation": {}, "chosen_action": {"type": "wait"}},
+    ]
+    try:
+        world_model_transitions(records)
+    except ValueError as error:
+        assert "mixed" in str(error)
+    else:
+        raise AssertionError("mixed experiment provenance was accepted")

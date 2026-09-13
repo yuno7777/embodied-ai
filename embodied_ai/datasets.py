@@ -27,6 +27,17 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
     explicitly contain them and a researcher opts in.
     """
     ordered = sorted(records, key=lambda record: (record.get("run_id", ""), record.get("step", 0)))
+    provenance_by_run: dict[str, str] = {}
+    for record in ordered:
+        run_id = str(record.get("run_id", ""))
+        provenance = json.dumps(
+            {"experiment_id": record.get("experiment_id"), "world_manifest": record.get("world_manifest")},
+            sort_keys=True,
+            default=str,
+        )
+        previous = provenance_by_run.setdefault(run_id, provenance)
+        if previous != provenance:
+            raise ValueError("one run cannot contain mixed experiment or world-manifest provenance")
     transitions: list[dict[str, Any]] = []
     for index, record in enumerate(ordered):
         next_record = ordered[index + 1] if index + 1 < len(ordered) and ordered[index + 1].get("run_id") == record.get("run_id") else None
