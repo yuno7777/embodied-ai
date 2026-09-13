@@ -42,6 +42,27 @@ def test_tabular_q_proposes_only_locally_visible_object_actions():
     assert policy.act(observed).model_dump(exclude_none=True) == {"type": "pickup", "item_id": "local_key"}
 
 
+def test_tabular_q_uses_only_reachable_entities_and_public_inventory_items():
+    policy = TabularQPolicy(TabularQConfig(epsilon=0), seed=1)
+    observed = observation()
+    observed["allowed_action_types"] += ["open", "pickup", "use_item"]
+    observed["agent"]["inventory"] = ["water"]
+    observed["visible_cells"] = [
+        {"relative_position": {"x": 0, "y": 0}, "terrain": "floor", "entities": [{"id": "near_key", "type": "item"}]},
+        {"relative_position": {"x": 1, "y": 0}, "terrain": "floor", "entities": [{"id": "near_door", "type": "door"}]},
+        {"relative_position": {"x": 2, "y": 0}, "terrain": "floor", "entities": [{"id": "far_item", "type": "item"}, {"id": "far_door", "type": "door"}]},
+    ]
+    candidates = policy._candidate_actions(observed)
+    payloads = [action.model_dump(exclude_none=True) for _, action in candidates]
+    assert {"type": "pickup", "item_id": "near_key"} in payloads
+    assert {"type": "open", "target_id": "near_door"} in payloads
+    assert {"type": "use_item", "item_id": "water"} in payloads
+    assert all("far_" not in str(payload) for payload in payloads)
+    policy.q_values[policy.observation_key(observed)] = [0] * 9
+    policy.q_values[policy.observation_key(observed)][policy._use_item_index] = 5
+    assert policy.act(observed).model_dump(exclude_none=True) == {"type": "use_item", "item_id": "water"}
+
+
 def test_tabular_q_evaluation_is_greedy_and_does_not_mutate_values():
     class Environment:
         def __enter__(self): return self

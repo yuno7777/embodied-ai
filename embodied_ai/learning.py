@@ -24,9 +24,10 @@ class TabularQConfig:
 class TabularQPolicy:
     """A checkpointable Q-learning policy over compact, non-privileged observations.
 
-    It intentionally uses only movement, wait, and inspect actions because those
-    are valid without guessing hidden object IDs. More capable policies can use
-    the same environment contract with richer action proposal mechanisms.
+    Object IDs are proposed only when a public observation makes the interaction
+    geometrically valid; inventory actions use only public carried-item IDs.
+    More capable policies can use the same environment contract with richer
+    action proposal mechanisms.
     """
 
     name = "tabular_q"
@@ -40,6 +41,7 @@ class TabularQPolicy:
     )
     _open_index = len(_actions)
     _pickup_index = len(_actions) + 1
+    _use_item_index = len(_actions) + 2
 
     def __init__(self, config: TabularQConfig | None = None, seed: int = 0):
         self.config = config or TabularQConfig()
@@ -76,30 +78,42 @@ class TabularQPolicy:
             return self._open_index
         if action.type == "pickup" and action.item_id:
             return self._pickup_index
+        if action.type == "use_item" and action.item_id:
+            return self._use_item_index
         try:
             return self._actions.index(action)
         except ValueError as error:
             raise ValueError("action is outside the tabular baseline action set") from error
 
     def _values(self, state: str) -> list[float]:
-        values = self.q_values.setdefault(state, [0.0] * (len(self._actions) + 2))
-        values.extend([0.0] * (len(self._actions) + 2 - len(values)))
+        values = self.q_values.setdefault(state, [0.0] * (len(self._actions) + 3))
+        values.extend([0.0] * (len(self._actions) + 3 - len(values)))
         return values
 
     def _candidate_actions(self, observation: dict[str, Any]) -> list[tuple[int, ActionRequest]]:
         candidates = list(enumerate(self._actions))
         visible_entities = sorted(
-            (entity for cell in observation.get("visible_cells", []) for entity in cell.get("entities", []) if isinstance(entity, dict)),
-            key=lambda entity: (str(entity.get("type", "")), str(entity.get("id", ""))),
+            (
+                (entity, cell.get("relative_position", {}))
+                for cell in observation.get("visible_cells", [])
+                if isinstance(cell, dict)
+                for entity in cell.get("entities", [])
+                if isinstance(entity, dict)
+            ),
+            key=lambda item: (str(item[0].get("type", "")), str(item[0].get("id", ""))),
         )
-        for entity in visible_entities:
+        for entity, cell_position in visible_entities:
             entity_id = entity.get("id")
             if not isinstance(entity_id, str) or not entity_id:
                 continue
-            if entity.get("type") in {"door", "container"}:
+            position = entity.get("relative_position", cell_position)
+            distance = abs(position.get("x", 99)) + abs(position.get("y", 99)) if isinstance(position, dict) else 99
+            if entity.get("type") in {"door", "container"} and distance <= 1:
                 candidates.append((self._open_index, ActionRequest(type="open", target_id=entity_id)))
-            elif entity.get("type") == "item":
+            elif entity.get("type") == "item" and distance == 0:
                 candidates.append((self._pickup_index, ActionRequest(type="pickup", item_id=entity_id)))
+        for item_id in sorted(str(item) for item in observation.get("agent", {}).get("inventory", [])):
+            candidates.append((self._use_item_index, ActionRequest(type="use_item", item_id=item_id)))
         return candidates
 
     def act(self, observation: dict[str, Any]) -> ActionRequest:
