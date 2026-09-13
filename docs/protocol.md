@@ -27,3 +27,5 @@ Before the runner submits a model action, it records `POST /api/runs/{id}/decisi
 `GET /api/runs/{id}/status` exposes only orchestration control state (`paused`, `done`, terminal reason, and step). Provider workers check it before every model request, so a paused run waits without consuming another provider turn and an aborted run exits cleanly.
 
 Python trajectory exports record `agent_context` beside each observation. It is the compact context payload supplied to the provider immediately before that decision, never an authoritative snapshot or hidden-state projection.
+
+For offline world-model research, the headless CLI may be invoked with `--include-research-snapshots`. That explicit local opt-in records a before/after `WorldSnapshot` pair beside each transition as `research_snapshot` and `next_research_snapshot`; it does not alter either the observation or provider context. Dataset conversion excludes the privileged pair unless its caller explicitly requests privileged state.
