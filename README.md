@@ -68,6 +68,8 @@ Open `http://localhost:3000`.
 
 The helper configures the local Windows Rust toolchain. It is the only simulation server; Python only orchestrates model decisions through the Rust HTTP API. With Terminal 3 running, choose a provider and observation mode in the observer and select **Start agent**. It returns the authoritative run ID immediately, while the provider continues independently and the Rust WebSocket streams the live simulation. Use **Start manual** for the human-control baseline.
 
+Every browser-launched provider run writes an immutable experiment manifest before rollout. Its trajectory records carry the same experiment ID, and the completed local-run status retains the manifest path even when a provider fails before emitting trajectory steps.
+
 ## Run policies and benchmarks
 
 Generate a deterministic symbolic world without starting an episode:
