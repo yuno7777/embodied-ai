@@ -1,4 +1,4 @@
-from embodied_ai.learning import TabularQConfig, TabularQPolicy, evaluate_tabular_q, train_tabular_q
+from embodied_ai.learning import TabularQConfig, TabularQPolicy, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
 
 
 def observation(health=100):
@@ -74,3 +74,17 @@ def test_tabular_q_evaluation_is_greedy_and_does_not_mutate_values():
     before = dict(policy.q_values)
     assert evaluate_tabular_q(Environment, policy, [9])[0]["terminal_reason"] == "escaped"
     assert policy.config.epsilon == 1 and policy.q_values == before
+
+
+def test_tabular_partition_evaluation_keeps_distributions_disjoint_and_frozen():
+    calls = []
+    class Environment:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def reset(self, *, seed, options): calls.append((seed, options)); return observation(), {}
+        def step(self, _action): return observation(), 1, True, False, {"terminal_reason": "escaped"}
+    policy = TabularQPolicy(TabularQConfig(epsilon=1), seed=1)
+    result = evaluate_tabular_partitions(Environment, policy, {"train": [1], "validation": [2], "test": [3]}, reset_options_for_partition=lambda partition, seed: {"partition": partition, "seed": seed})
+    assert {name: episodes[0]["seed"] for name, episodes in result.items()} == {"train": 1, "validation": 2, "test": 3}
+    assert calls == [(3, {"partition": "test", "seed": 3}), (1, {"partition": "train", "seed": 1}), (2, {"partition": "validation", "seed": 2})]
+    assert policy.config.epsilon == 1

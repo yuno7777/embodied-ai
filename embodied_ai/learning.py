@@ -210,3 +210,22 @@ def evaluate_tabular_q(
         return episodes
     finally:
         policy.config = TabularQConfig(policy.config.learning_rate, policy.config.discount, original_epsilon)
+
+
+def evaluate_tabular_partitions(
+    environment_factory: Callable[[], Any], policy: TabularQPolicy, partitions: dict[str, list[int]], max_steps: int = 256,
+    reset_options_for_partition: Callable[[str, int], dict[str, Any]] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Evaluate one frozen checkpoint on explicit, disjoint seed distributions."""
+    if set(partitions) != {"train", "validation", "test"}:
+        raise ValueError("partitions must contain train, validation, and test")
+    seeds = [seed for partition in partitions.values() for seed in partition]
+    if not seeds or any(not isinstance(seed, int) or seed < 0 for seed in seeds) or len(set(seeds)) != len(seeds):
+        raise ValueError("partition seeds must be non-negative, non-empty, and disjoint")
+    return {
+        name: evaluate_tabular_q(
+            environment_factory, policy, partition_seeds, max_steps,
+            (lambda seed, partition=name: reset_options_for_partition(partition, seed)) if reset_options_for_partition else None,
+        )
+        for name, partition_seeds in sorted(partitions.items())
+    }
