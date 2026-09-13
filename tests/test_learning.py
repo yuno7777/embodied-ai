@@ -32,6 +32,16 @@ def test_tabular_q_training_uses_rl_style_environment_only():
     assert all(episode["total_reward"] == 2 for episode in episodes)
 
 
+def test_tabular_q_proposes_only_locally_visible_object_actions():
+    policy = TabularQPolicy(TabularQConfig(epsilon=0), seed=1)
+    observed = observation()
+    observed["allowed_action_types"].append("pickup")
+    observed["visible_cells"][0]["entities"] = [{"id": "local_key", "type": "item"}]
+    policy.q_values[policy.observation_key(observed)] = [0] * 8
+    policy.q_values[policy.observation_key(observed)][policy._pickup_index] = 4
+    assert policy.act(observed).model_dump(exclude_none=True) == {"type": "pickup", "item_id": "local_key"}
+
+
 def test_tabular_q_evaluation_is_greedy_and_does_not_mutate_values():
     class Environment:
         def __enter__(self): return self

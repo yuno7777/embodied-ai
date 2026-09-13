@@ -38,6 +38,8 @@ class TabularQPolicy:
         ActionRequest(type="inspect"),
         ActionRequest(type="wait"),
     )
+    _open_index = len(_actions)
+    _pickup_index = len(_actions) + 1
 
     def __init__(self, config: TabularQConfig | None = None, seed: int = 0):
         self.config = config or TabularQConfig()
@@ -70,25 +72,47 @@ class TabularQPolicy:
         return json.dumps(compact, sort_keys=True, separators=(",", ":"))
 
     def action_index(self, action: ActionRequest) -> int:
+        if action.type == "open" and action.target_id:
+            return self._open_index
+        if action.type == "pickup" and action.item_id:
+            return self._pickup_index
         try:
             return self._actions.index(action)
         except ValueError as error:
             raise ValueError("action is outside the tabular baseline action set") from error
 
     def _values(self, state: str) -> list[float]:
-        return self.q_values.setdefault(state, [0.0] * len(self._actions))
+        values = self.q_values.setdefault(state, [0.0] * (len(self._actions) + 2))
+        values.extend([0.0] * (len(self._actions) + 2 - len(values)))
+        return values
+
+    def _candidate_actions(self, observation: dict[str, Any]) -> list[tuple[int, ActionRequest]]:
+        candidates = list(enumerate(self._actions))
+        visible_entities = sorted(
+            (entity for cell in observation.get("visible_cells", []) for entity in cell.get("entities", []) if isinstance(entity, dict)),
+            key=lambda entity: (str(entity.get("type", "")), str(entity.get("id", ""))),
+        )
+        for entity in visible_entities:
+            entity_id = entity.get("id")
+            if not isinstance(entity_id, str) or not entity_id:
+                continue
+            if entity.get("type") in {"door", "container"}:
+                candidates.append((self._open_index, ActionRequest(type="open", target_id=entity_id)))
+            elif entity.get("type") == "item":
+                candidates.append((self._pickup_index, ActionRequest(type="pickup", item_id=entity_id)))
+        return candidates
 
     def act(self, observation: dict[str, Any]) -> ActionRequest:
         state = self.observation_key(observation)
         allowed = set(observation.get("allowed_action_types", []))
-        available = [index for index, action in enumerate(self._actions) if action.type in allowed]
+        available = [(index, action) for index, action in self._candidate_actions(observation) if action.type in allowed]
         if not available:
             return ActionRequest(type="wait")
         if self.random.random() < self.config.epsilon:
-            return self._actions[self.random.choice(available)]
+            return self.random.choice(available)[1]
         values = self._values(state)
-        best = max(values[index] for index in available)
-        return self._actions[next(index for index in available if values[index] == best)]
+        best = max(values[index] for index, _ in available)
+        return next(action for index, action in available if values[index] == best)
 
     def update(self, observation: dict[str, Any], action: ActionRequest, reward: float, next_observation: dict[str, Any], terminated: bool) -> None:
         state, next_state = self.observation_key(observation), self.observation_key(next_observation)

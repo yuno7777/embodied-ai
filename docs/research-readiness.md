@@ -5,7 +5,7 @@ Scores are deliberately conservative: 0 means absent, 5 means ready for sustaine
 | Area | Score | Evidence and limitation |
 | --- | ---: | --- |
 | Procedural worlds | 3/5 | Seeded two-room/corridor worlds, items, hazards, NPC, deterministic perturbation, manifest hashing and solvability checks. Room graphs and broad task composition are not yet implemented. |
-| RL interface | 3/5 | Rust-authoritative reset/step adapter, generated-world configuration, reward profiles, and a tabular-Q smoke baseline. No high-capacity policy baseline. |
+| RL interface | 3/5 | Rust-authoritative reset/step adapter, generated-world configuration, reward profiles, and a tabular-Q smoke baseline that can act on locally visible doors, containers, and items. No high-capacity policy baseline. |
 | Generalization | 3/5 | Explicit disjoint seed plans, held-out evaluator, confidence intervals, and manifest-backed per-episode reports. No published multi-run learning comparison yet. |
 | World-model datasets | 3/5 | Observation/action/next-observation transitions, optional privileged state, and strict experiment/world provenance. No large corpus or predictive-model training run yet. |
 | Custom architecture integration | 3/5 | Stable policy/action/observation boundary, memory controls, and headless API. Neural architecture adapters remain future work. |
