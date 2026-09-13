@@ -81,6 +81,19 @@ def summarize_world_model_dataset(records: list[dict[str, Any]]) -> dict[str, An
         if record.get("done") and record.get("terminal_reason") is not None
     )
     observation_modes = Counter(str(record.get("observation_mode", "unknown")) for record in records)
+    policy_state_modes = Counter(str(record.get("policy_state_mode", "unknown")) for record in records)
+    metadata_records = [record.get("agent_metadata") for record in records if isinstance(record.get("agent_metadata"), dict)]
+    metadata_field_counts = Counter(
+        field for metadata in metadata_records for field in metadata if isinstance(field, str)
+    )
+    planner_metadata_records = sum(
+        isinstance(metadata.get("planner"), dict) for metadata in metadata_records
+    )
+    policy_state_by_run: dict[str, set[str]] = {}
+    for record in records:
+        run_id = record.get("run_id")
+        if run_id is not None:
+            policy_state_by_run.setdefault(str(run_id), set()).add(str(record.get("policy_state_mode", "unknown")))
     paired_snapshots = sum(
         "research_snapshot" in record and "next_research_snapshot" in record for record in records
     )
@@ -94,6 +107,11 @@ def summarize_world_model_dataset(records: list[dict[str, Any]]) -> dict[str, An
         "action_counts": dict(sorted(action_counts.items())),
         "terminal_reasons": dict(sorted(terminal_reasons.items())),
         "observation_modes": dict(sorted(observation_modes.items())),
+        "policy_state_modes": dict(sorted(policy_state_modes.items())),
+        "runs_with_mixed_policy_state_mode": sum(len(modes) > 1 for modes in policy_state_by_run.values()),
+        "records_with_agent_metadata": len(metadata_records),
+        "agent_metadata_field_counts": dict(sorted(metadata_field_counts.items())),
+        "planner_metadata_records": planner_metadata_records,
         "records_with_exact_next_observation": sum("next_observation" in record for record in records),
         "privileged_snapshot_pairs": paired_snapshots,
         "partial_privileged_snapshot_records": partial_snapshots,
