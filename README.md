@@ -143,7 +143,7 @@ Custom policies can use the headless adapter directly. `distribution` is a named
 ```python
 from embodied_ai.environment import EmbodiedEnv, EmbodiedEnvConfig
 
-with EmbodiedEnv(EmbodiedEnvConfig(distribution="train", observation_mode="normal")) as env:
+with EmbodiedEnv(distribution="train", observation_mode="normal") as env:
     observation, info = env.reset(seed=123)
     while True:
         observation, reward, terminated, truncated, info = env.step(policy.act(observation))
