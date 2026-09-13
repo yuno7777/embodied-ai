@@ -130,6 +130,49 @@ def test_generalization_asserts_matching_built_in_partition_membership(monkeypat
     ]
 
 
+def test_generalization_can_use_distinct_generator_configs_per_partition(monkeypatch, tmp_path):
+    requested = []
+    def fake_run(_provider, seed, _base_url, **kwargs):
+        requested.append(kwargs["generated_world"])
+        return RemoteRunResult(f"run-{seed}", "timeout", 1, [{"metrics": {}}])
+    monkeypatch.setattr(benchmark, "run_remote", fake_run)
+    plan = benchmark.GeneralizationPlan(
+        benchmark.SeedPartition("train", (0,)),
+        benchmark.SeedPartition("validation", (8000,)),
+        benchmark.SeedPartition("test", (9000,)),
+    )
+    configs = {
+        "train": {"min_rooms": 2, "max_rooms": 2},
+        "validation": {"min_rooms": 3, "max_rooms": 3},
+        "test": {"min_rooms": 3, "max_rooms": 3},
+    }
+    report = benchmark.evaluate_generalization_remote(
+        plan, tmp_path, "http://sim", generator_configs_by_partition=configs,
+    )
+    assert [item["config"] for item in requested] == [configs["train"], configs["validation"], configs["test"]]
+    assert report["generator_configs_by_partition"] == configs
+    assert {
+        episode["partition"]: episode["generator_config"]
+        for episode in report["episode_results"]
+    } == configs
+
+
+def test_generalization_rejects_incomplete_partition_generator_configs(tmp_path):
+    plan = benchmark.GeneralizationPlan(
+        benchmark.SeedPartition("train", (0,)),
+        benchmark.SeedPartition("validation", (1,)),
+        benchmark.SeedPartition("test", (2,)),
+    )
+    try:
+        benchmark.evaluate_generalization_remote(
+            plan, tmp_path, "http://sim", generator_configs_by_partition={"train": {}},
+        )
+    except ValueError as error:
+        assert "train, validation, and test" in str(error)
+    else:
+        raise AssertionError("incomplete partition configs were accepted")
+
+
 def test_parallel_scaling_records_each_requested_worker_level(monkeypatch, tmp_path):
     calls = []
     def fake_benchmark(runs, seed_start, output, base_url, provider_name, concurrency):

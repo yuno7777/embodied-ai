@@ -129,11 +129,25 @@ def evaluate_generalization_remote(
     provider_name: str = "scripted",
     concurrency: int = 1,
     generator_config: Mapping[str, Any] | None = None,
+    generator_configs_by_partition: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Evaluate a policy over disjoint procedural worlds and persist an exact report."""
     if concurrency < 1 or concurrency > 32:
         raise ValueError("concurrency must be between 1 and 32")
+    if generator_config is not None and generator_configs_by_partition is not None:
+        raise ValueError("choose either one generator config or configs by partition")
+    expected_partitions = {"train", "validation", "test"}
+    if generator_configs_by_partition is not None:
+        if set(generator_configs_by_partition) != expected_partitions:
+            raise ValueError("generator configs must contain train, validation, and test")
+        if any(not isinstance(config, Mapping) for config in generator_configs_by_partition.values()):
+            raise ValueError("each partition generator config must be an object")
     output.mkdir(parents=True, exist_ok=True)
+    partition_configs = (
+        {name: dict(config) for name, config in generator_configs_by_partition.items()}
+        if generator_configs_by_partition is not None
+        else None
+    )
     manifest = ExperimentManifest(
         scenario_id="procedural",
         seed=plan.train.seeds[0],
@@ -142,7 +156,11 @@ def evaluate_generalization_remote(
         memory_mode="none",
         memory_window=1,
         generator_version=1,
-        generated_world={"config": dict(generator_config)} if generator_config is not None else {},
+        generated_world=(
+            {"config_by_partition": partition_configs}
+            if partition_configs is not None
+            else {"config": dict(generator_config)} if generator_config is not None else {}
+        ),
         world_distribution={name: tuple(seeds) for name, seeds in plan.as_dict().items()},
         agent_config={"policy": provider_name},
     )
@@ -152,8 +170,9 @@ def evaluate_generalization_remote(
     def execute(job: tuple[str, int]) -> dict[str, Any]:
         partition, seed = job
         generated_world: dict[str, Any] = {"seed": seed}
-        if generator_config is not None:
-            generated_world["config"] = dict(generator_config)
+        selected_config = partition_configs.get(partition) if partition_configs is not None else generator_config
+        if selected_config is not None:
+            generated_world["config"] = dict(selected_config)
         if built_in_world_partition(seed) == partition:
             generated_world["partition"] = partition
         result = run_remote(provider_for(provider_name, seed), seed, base_url, generated_world=generated_world)
@@ -171,6 +190,7 @@ def evaluate_generalization_remote(
             "exploration_coverage": metrics.get("exploration_coverage"),
             "resource_efficiency": metrics.get("resource_efficiency"),
             "control_elapsed_ms": final.get("control_elapsed_ms"),
+            "generator_config": dict(selected_config) if selected_config is not None else None,
         }
 
     with ThreadPoolExecutor(max_workers=min(concurrency, len(jobs))) as executor:
@@ -184,6 +204,7 @@ def evaluate_generalization_remote(
         "engine_version": "rust-v1",
         "world_distribution": plan.as_dict(),
         "generator_config": dict(generator_config) if generator_config is not None else None,
+        "generator_configs_by_partition": partition_configs,
         "episode_results": rows,
     }
     (output / "generalization_report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

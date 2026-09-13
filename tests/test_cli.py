@@ -61,3 +61,31 @@ def test_generalize_cli_defaults_match_authoritative_seed_partitions(monkeypatch
     )
     cli.main()
     assert captured == {"train": [0, 1, 2, 3, 4], "validation": [8000, 8001], "test": [9000, 9001]}
+
+
+def test_generalize_cli_forwards_per_partition_generator_configs(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(
+        cli,
+        "evaluate_generalization_remote",
+        lambda _plan, *_args, **kwargs: (captured.update(kwargs) or {"ok": True}),
+    )
+    paths = {}
+    for name, rooms in {"train": 2, "validation": 3, "test": 3}.items():
+        path = tmp_path / f"{name}.json"
+        path.write_text(f'{{"min_rooms": {rooms}, "max_rooms": {rooms}}}')
+        paths[name] = path
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["embodied-ai", "generalize", "--server-url", "http://sim", "--output", str(tmp_path),
+         "--train-generator-config", str(paths["train"]),
+         "--validation-generator-config", str(paths["validation"]),
+         "--test-generator-config", str(paths["test"])],
+    )
+    cli.main()
+    assert captured["generator_configs_by_partition"] == {
+        "train": {"min_rooms": 2, "max_rooms": 2},
+        "validation": {"min_rooms": 3, "max_rooms": 3},
+        "test": {"min_rooms": 3, "max_rooms": 3},
+    }
