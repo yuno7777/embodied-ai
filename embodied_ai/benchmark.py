@@ -104,6 +104,11 @@ def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
         failure_reasons = Counter(
             str(row.get("outcome") or "unknown") for row in rows_for_partition if row.get("outcome") != "escaped"
         )
+        hazard_groups: dict[str, list[dict[str, Any]]] = {}
+        for row in rows_for_partition:
+            for kind in row.get("hazard_kinds", []):
+                if isinstance(kind, str):
+                    hazard_groups.setdefault(kind, []).append(row)
         total_steps = sum(step_counts)
         return {
             "episodes": len(rows_for_partition),
@@ -116,6 +121,10 @@ def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "mean_resource_efficiency": fmean(efficiency) if efficiency else None,
             "failure_reasons": dict(sorted(failure_reasons.items())),
             "steps_per_second": total_steps / (sum(elapsed) / 1000) if elapsed and sum(elapsed) > 0 else None,
+            "hazard_kind_breakdown": {
+                kind: {"episodes": len(items), "success_rate": sum(item.get("outcome") == "escaped" for item in items) / len(items)}
+                for kind, items in sorted(hazard_groups.items())
+            },
         }
 
     partitions = {name: summarize(grouped[name]) for name in sorted(expected)}

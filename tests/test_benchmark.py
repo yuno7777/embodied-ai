@@ -94,9 +94,9 @@ def test_generalization_plan_rejects_overlapping_seed_sets():
 
 def test_generalization_summary_reports_held_out_gap_and_uncertainty():
     rows = [
-        {"partition": "train", "outcome": "escaped", "steps": 2, "total_reward": 5, "invalid_actions": 0, "exploration_coverage": .7, "resource_efficiency": .9, "control_elapsed_ms": 10},
-        {"partition": "validation", "outcome": "hazard", "steps": 4, "total_reward": -2, "invalid_actions": 1, "exploration_coverage": .4, "resource_efficiency": .2, "control_elapsed_ms": 20},
-        {"partition": "test", "outcome": "hazard", "steps": 3, "total_reward": -3, "invalid_actions": 1, "exploration_coverage": .3, "resource_efficiency": .1, "control_elapsed_ms": 15},
+        {"partition": "train", "outcome": "escaped", "steps": 2, "total_reward": 5, "invalid_actions": 0, "exploration_coverage": .7, "resource_efficiency": .9, "control_elapsed_ms": 10, "hazard_kinds": ["electrical"]},
+        {"partition": "validation", "outcome": "hazard", "steps": 4, "total_reward": -2, "invalid_actions": 1, "exploration_coverage": .4, "resource_efficiency": .2, "control_elapsed_ms": 20, "hazard_kinds": ["fire"]},
+        {"partition": "test", "outcome": "hazard", "steps": 3, "total_reward": -3, "invalid_actions": 1, "exploration_coverage": .3, "resource_efficiency": .1, "control_elapsed_ms": 15, "hazard_kinds": ["fire"]},
     ]
     report = benchmark.summarize_generalization(rows)
     assert report["partitions"]["train"]["success_rate"] == 1.0
@@ -104,6 +104,7 @@ def test_generalization_summary_reports_held_out_gap_and_uncertainty():
     assert report["generalization_gap"]["train_minus_test_success_rate"] == 1.0
     assert len(report["partitions"]["test"]["success_rate_wilson_95"]) == 2
     assert report["partitions"]["validation"]["failure_reasons"] == {"hazard": 1}
+    assert report["partitions"]["train"]["hazard_kind_breakdown"] == {"electrical": {"episodes": 1, "success_rate": 1.0}}
 
 
 def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):
