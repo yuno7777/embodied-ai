@@ -38,7 +38,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 
 - The procedural generator is deterministic and constraint checked, but currently produces a compact two-room family rather than arbitrary room graphs or broad task compositions.
 - Trajectories export observations, actions, events, reward, and optional privileged transition data. Per-step agent metadata remains limited to provider-safe operational metadata.
-- Parallel episode execution is supported by bounded local threads for benchmarks. It has not yet been characterized at the requested 1/8/32/64 environment levels.
+- Parallel episode execution is supported by bounded local threads for benchmarks. A first 1/8-worker local measurement is recorded in [performance notes](performance-notes.md); 32/64-worker levels remain unmeasured.
 - The observer UI remains an observer/researcher console; it is not required for headless execution.
 
 ## Not implemented
