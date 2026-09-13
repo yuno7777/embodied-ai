@@ -1,5 +1,7 @@
 # Generator configuration examples
 
-`compact-v1.json` is a complete WorldGeneratorConfig for generator version 1. It was accepted by the authoritative Rust `POST /api/worlds/generate` endpoint with seed 42 on 2026-09-13, producing a solvable 9×8 world.
+`compact-v1.json` is a complete WorldGeneratorConfig for generator version 1. It permits either supported compact topology: two or three rooms connected by open corridor doors.
 
-Supply every field when providing a config: the server accepts an omitted `config` as defaults, but treats a supplied configuration as explicit and versioned.
+`two-room-v1.json` and `three-room-v1.json` pin the room count. They make a layout-family experiment reproducible: use one as a training distribution and the other as a held-out topology, while retaining deterministic seed variation within each family.
+
+Supply every field when providing a config. The server accepts an omitted `config` as defaults, but treats a supplied configuration as explicit and versioned. `min_rooms` and `max_rooms` must be between two and three inclusive; use equal values to select one topology family.
