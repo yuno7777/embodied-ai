@@ -187,6 +187,10 @@ struct GenerateWorld {
     seed: u64,
     #[serde(default)]
     config: WorldGeneratorConfig,
+    /// Optional assertion that this seed belongs to the named built-in split.
+    /// Custom experiment splits remain manifest-defined rather than coerced
+    /// into the built-in distribution.
+    partition: Option<WorldPartition>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -434,12 +438,26 @@ async fn scenario_by_id(Path(id): Path<String>) -> Result<Json<Scenario>, Status
 async fn generate_world(
     Json(request): Json<GenerateWorld>,
 ) -> Result<Json<WorldManifest>, (StatusCode, String)> {
+    validate_requested_partition(&request).map_err(|message| (StatusCode::BAD_REQUEST, message))?;
     let generator = WorldGenerator::new(request.config)
         .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
     generator
         .generate(request.seed)
         .map(Json)
         .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))
+}
+fn validate_requested_partition(request: &GenerateWorld) -> Result<(), String> {
+    let Some(partition) = request.partition else {
+        return Ok(());
+    };
+    if WorldDistribution::default().contains(partition, request.seed) {
+        Ok(())
+    } else {
+        Err(format!(
+            "seed {} is not in the requested built-in world partition",
+            request.seed
+        ))
+    }
 }
 async fn world_partition(Path(seed): Path<u64>) -> Result<Json<WorldPartition>, StatusCode> {
     let distribution = WorldDistribution::default();
@@ -476,6 +494,8 @@ async fn create(
         .generated_world
         .as_ref()
         .map(|generated| {
+            validate_requested_partition(generated)
+                .map_err(|message| (StatusCode::BAD_REQUEST, message))?;
             WorldGenerator::new(generated.config.clone())
                 .and_then(|generator| generator.generate(generated.seed))
                 .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))
@@ -1683,6 +1703,36 @@ mod tests {
                 .as_bool()
                 .unwrap()
         );
+
+        let held_out_generated_run = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/runs")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"seed":7,"generated_world":{"seed":9000,"partition":"test"}}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(held_out_generated_run.status(), StatusCode::CREATED);
+
+        let mismatched_partition = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/worlds/generate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"seed":42,"partition":"test"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(mismatched_partition.status(), StatusCode::BAD_REQUEST);
 
         let generated = app
             .clone()

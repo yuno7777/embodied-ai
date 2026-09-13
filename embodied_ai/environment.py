@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from .runner import RustRunClient
 from .schemas import ActionRequest
@@ -15,6 +15,7 @@ class EmbodiedEnvConfig:
     server_url: str = "http://127.0.0.1:8080"
     scenario_id: str | None = None
     generated_world: dict[str, Any] | None = None
+    world_partition: Literal["train", "validation", "test"] | None = None
     reward_config: dict[str, int] | None = None
     observation_mode: str = "normal"
     max_steps: int | None = None
@@ -41,9 +42,18 @@ class EmbodiedEnv:
         options = options or {}
         scenario_id = options.get("scenario_id", self.config.scenario_id)
         generated_world = options.get("generated_world", self.config.generated_world)
+        world_partition = options.get("world_partition", self.config.world_partition)
         reward_config = options.get("reward_config", self.config.reward_config)
         observation_mode = options.get("observation_mode", self.config.observation_mode)
         max_steps = options.get("max_steps", self.config.max_steps)
+        if world_partition is not None:
+            if scenario_id is not None:
+                raise ValueError("world_partition requires a generated world, not a catalog scenario")
+            generated_world = dict(generated_world or {"seed": seed})
+            existing_partition = generated_world.get("partition")
+            if existing_partition is not None and existing_partition != world_partition:
+                raise ValueError("generated_world partition conflicts with world_partition")
+            generated_world["partition"] = world_partition
         created = self._client.create(seed, max_steps, observation_mode, scenario_id, generated_world, reward_config)
         self._run_id = created["run_id"]
         observation = created["observation"]

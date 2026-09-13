@@ -55,6 +55,20 @@ def test_headless_environment_can_request_a_generated_world(monkeypatch):
     assert info["scenario_id"] is None
 
 
+def test_headless_environment_can_assert_an_authoritative_world_partition(monkeypatch):
+    monkeypatch.setattr(environment, "RustRunClient", FakeClient)
+    env = EmbodiedEnv(EmbodiedEnvConfig(world_partition="test"))
+    env.reset(seed=9000)
+    assert env._client.created == [(9000, None, "normal", None, {"seed": 9000, "partition": "test"}, None)]
+
+
+def test_headless_environment_rejects_partitioned_catalog_scenarios(monkeypatch):
+    monkeypatch.setattr(environment, "RustRunClient", FakeClient)
+    env = EmbodiedEnv(EmbodiedEnvConfig(scenario_id="survival_room", world_partition="train"))
+    with pytest.raises(ValueError, match="generated world"):
+        env.reset(seed=1)
+
+
 def test_headless_environment_forwards_reward_configuration(monkeypatch):
     monkeypatch.setattr(environment, "RustRunClient", FakeClient)
     rewards = {"baseline_per_step": -3}
