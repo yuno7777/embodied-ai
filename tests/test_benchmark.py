@@ -142,6 +142,20 @@ def test_generalization_provenance_rejects_episode_rows_that_disagree_with_the_r
         assert "observation_mode" in str(error)
     else:
         raise AssertionError("an episode from another sensor condition was accepted")
+    empty_split = {**report, "world_distribution": {"train": [], "validation": [2], "test": [3]}}
+    try:
+        benchmark.validate_generalization_report(empty_split)
+    except ValueError as error:
+        assert "non-empty" in str(error)
+    else:
+        raise AssertionError("an empty evaluation split was accepted")
+    mixed_config = {**report, "generator_config": {}, "generator_configs_by_partition": {name: {} for name in ("train", "validation", "test")}}
+    try:
+        benchmark.validate_generalization_report(mixed_config)
+    except ValueError as error:
+        assert "without a shared" in str(error)
+    else:
+        raise AssertionError("mixed generator configuration sources were accepted")
 
 
 def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):

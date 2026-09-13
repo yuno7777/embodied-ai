@@ -377,9 +377,18 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
     distribution = report.get("world_distribution")
     if not isinstance(distribution, dict) or set(distribution) != {"train", "validation", "test"}:
         raise ValueError("generalization report requires train, validation, and test world_distribution")
-    seeds = [seed for values in distribution.values() if isinstance(values, list) for seed in values]
+    if any(not isinstance(values, list) or not values for values in distribution.values()):
+        raise ValueError("generalization world_distribution partitions must be non-empty seed lists")
+    seeds = [seed for values in distribution.values() for seed in values]
     if any(not isinstance(seed, int) or seed < 0 for seed in seeds) or len(seeds) != len(set(seeds)):
         raise ValueError("generalization world_distribution seeds must be non-negative and disjoint")
+    shared_config = report.get("generator_config")
+    configs_by_partition = report.get("generator_configs_by_partition")
+    if shared_config is not None and not isinstance(shared_config, dict):
+        raise ValueError("generalization generator_config must be an object or null")
+    if configs_by_partition is not None:
+        if shared_config is not None or not isinstance(configs_by_partition, dict) or set(configs_by_partition) != {"train", "validation", "test"} or any(not isinstance(config, dict) for config in configs_by_partition.values()):
+            raise ValueError("generalization generator configs by partition must be complete objects without a shared config")
     partitions = report.get("partitions")
     if not isinstance(partitions, dict) or set(partitions) != {"train", "validation", "test"}:
         raise ValueError("generalization report requires train, validation, and test summaries")
@@ -392,8 +401,6 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
     observed_episodes = {(row.get("partition"), row.get("seed")) for row in episodes if isinstance(row, dict)}
     if len(episodes) != len(observed_episodes) or observed_episodes != expected_episodes:
         raise ValueError("generalization episode_results must contain each declared partition seed exactly once")
-    configs_by_partition = report.get("generator_configs_by_partition")
-    shared_config = report.get("generator_config")
     for row in episodes:
         if not isinstance(row, dict) or row.get("observation_mode") != report["observation_mode"]:
             raise ValueError("generalization episodes must match the report observation_mode")
