@@ -34,6 +34,11 @@ def test_trajectory_validation_rejects_incomplete_or_inconsistent_records(mutato
     with pytest.raises(TrajectoryValidationError):
         validate_trajectory(rows)
 
+
+def test_trajectory_validation_rejects_incomplete_versioned_records():
+    with pytest.raises(TrajectoryValidationError, match="versioned"):
+        validate_trajectory([{"trajectory_schema_version": 1, "run_id": "run-1", "step": 1, "chosen_action": {"type": "wait"}, "events": [], "done": True, "terminal_reason": "escaped"}])
+
 def test_trajectory_filters_and_offline_replay_verification():
     assert len(filter_trajectory(records(),action_type="move",valid_only=True,event_type="AgentMoved"))==1
     replay={"replay_version":1,"snapshot":{"run_id":"r","step":1},"timeline":[{"run_id":"r","step":0},{"run_id":"r","step":1}],"observations":[{},{}],"events":[],"decisions":[{}],"actions":[{"type":"wait"}]}

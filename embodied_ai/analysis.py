@@ -7,7 +7,7 @@ from typing import Any
 import json
 import hashlib
 from pathlib import Path
-from .schemas import ActionRequest
+from .schemas import ActionRequest, TrajectoryStep
 
 
 class TrajectoryValidationError(ValueError):
@@ -17,6 +17,12 @@ class TrajectoryValidationError(ValueError):
 def validate_trajectory(records: list[dict[str, Any]]) -> None:
     if not records:
         raise TrajectoryValidationError("Trajectory has no decision records.")
+    for record in records:
+        if record.get("trajectory_schema_version") == 1:
+            try:
+                TrajectoryStep.model_validate(record)
+            except ValueError as error:
+                raise TrajectoryValidationError(f"Invalid versioned trajectory step: {error}") from error
     run_ids = {record.get("run_id") for record in records}
     if len(run_ids) != 1 or None in run_ids:
         raise TrajectoryValidationError("Trajectory must contain one non-empty run_id.")
