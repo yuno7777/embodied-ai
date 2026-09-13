@@ -1,3 +1,4 @@
+import json
 import sys
 
 import pytest
@@ -45,6 +46,28 @@ def test_run_cli_forwards_a_generator_config_file(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["embodied-ai", "run", "--generated-world-seed", "99", "--generator-config", str(config), "--server-url", "http://sim", "--output", str(tmp_path)])
     cli.main()
     assert captured["generated_world"] == {"seed": 99, "config": {"min_width": 9, "max_width": 9}}
+
+
+def test_run_cli_forwards_and_pins_a_complete_reward_profile(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(cli, "run_remote", lambda *_args, **kwargs: (captured.update(kwargs) or RemoteRunResult("run-1", "timeout", 0, [])))
+    monkeypatch.setattr(cli, "export_jsonl", lambda _records, path: path)
+    monkeypatch.setattr(cli, "export_parquet", lambda _records, _path: None)
+    rewards = {"baseline_per_step": -2, "discovery_bonus": 3, "invalid_action_penalty": -4, "terminal_success": 50, "terminal_failure": -60}
+    config = tmp_path / "rewards.json"; config.write_text(json.dumps(rewards), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "run", "--reward-config", str(config), "--server-url", "http://sim", "--output", str(tmp_path)])
+    cli.main()
+    manifest = json.loads(next(tmp_path.glob("*.experiment.json")).read_text())
+    assert captured["reward_config"] == rewards
+    assert manifest["reward_config"] == rewards
+
+
+def test_run_cli_rejects_an_incomplete_reward_profile(monkeypatch, tmp_path):
+    config = tmp_path / "rewards.json"; config.write_text('{"baseline_per_step": -1}', encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "run", "--reward-config", str(config), "--server-url", "http://sim"])
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 2
 
 
 def test_run_cli_requires_an_explicit_flag_for_privileged_research_snapshots(monkeypatch, tmp_path):
