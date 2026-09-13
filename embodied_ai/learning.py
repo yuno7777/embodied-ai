@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .schemas import ActionRequest
+from .action_candidates import public_action_candidates
 
 
 def _episode_result(seed: int, step: int, total_reward: float, terminal_reason: str | None, info: dict[str, Any], control_elapsed_ms: float) -> dict[str, Any]:
@@ -104,30 +105,7 @@ class TabularQPolicy:
         return values
 
     def _candidate_actions(self, observation: dict[str, Any]) -> list[tuple[int, ActionRequest]]:
-        candidates = list(enumerate(self._actions))
-        visible_entities = sorted(
-            (
-                (entity, cell.get("relative_position", {}))
-                for cell in observation.get("visible_cells", [])
-                if isinstance(cell, dict)
-                for entity in cell.get("entities", [])
-                if isinstance(entity, dict)
-            ),
-            key=lambda item: (str(item[0].get("type", "")), str(item[0].get("id", ""))),
-        )
-        for entity, cell_position in visible_entities:
-            entity_id = entity.get("id")
-            if not isinstance(entity_id, str) or not entity_id:
-                continue
-            position = entity.get("relative_position", cell_position)
-            distance = abs(position.get("x", 99)) + abs(position.get("y", 99)) if isinstance(position, dict) else 99
-            if entity.get("type") in {"door", "container"} and distance <= 1:
-                candidates.append((self._open_index, ActionRequest(type="open", target_id=entity_id)))
-            elif entity.get("type") == "item" and distance == 0:
-                candidates.append((self._pickup_index, ActionRequest(type="pickup", item_id=entity_id)))
-        for item_id in sorted(str(item) for item in observation.get("agent", {}).get("inventory", [])):
-            candidates.append((self._use_item_index, ActionRequest(type="use_item", item_id=item_id)))
-        return candidates
+        return [(self.action_index(action), action) for action in public_action_candidates(observation)]
 
     def act(self, observation: dict[str, Any]) -> ActionRequest:
         state = self.observation_key(observation)
