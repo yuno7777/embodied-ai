@@ -129,6 +129,15 @@ def test_action_result_contract_rejects_incomplete_or_inconsistent_transitions()
         ActionResult.model_validate(payload)
 
 
+def test_committed_action_result_schema_matches_canonical_python_model():
+    schema = json.loads((Path(__file__).parents[1] / "schemas" / "action-result.v1.json").read_text())
+    generated = ActionResult.model_json_schema()
+    assert schema["additionalProperties"] == generated["additionalProperties"] is False
+    assert schema["required"] == generated["required"]
+    assert schema["properties"]["step_number"]["minimum"] == generated["properties"]["step_number"]["minimum"] == 0
+    assert schema["$defs"]["RewardBreakdown"]["required"] == generated["$defs"]["RewardBreakdown"]["required"]
+
+
 def test_authoritative_run_creation_sends_an_optional_max_step_override():
     calls = []
     class Response:

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://embodied-worlds.local/schemas/action-result.v1.json",
+  "title": "ActionResult",
+  "description": "Canonical v1 authoritative Rust transition result.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "observation": { "$ref": "observation.v1.json" },
+    "reward": { "type": "integer" },
+    "reward_breakdown": { "$ref": "#/$defs/RewardBreakdown" },
+    "done": { "type": "boolean" },
+    "terminal_reason": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null },
+    "events": { "type": "array", "items": { "$ref": "#/$defs/Event" } },
+    "step_number": { "type": "integer", "minimum": 0 },
+    "simulation_time": { "type": "integer", "minimum": 0 },
+    "metrics": { "$ref": "#/$defs/Metrics" }
+  },
+  "required": ["observation", "reward", "reward_breakdown", "done", "events", "step_number", "simulation_time", "metrics"],
+  "$defs": {
+    "RewardBreakdown": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "baseline": {"type":"integer"}, "progress": {"type":"integer"}, "invalid_action_penalty": {"type":"integer"}, "hazard_penalty": {"type":"integer"}, "terminal": {"type":"integer"} },
+      "required": ["baseline", "progress", "invalid_action_penalty", "hazard_penalty", "terminal"]
+    },
+    "Event": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "event_id": {"type":"string","minLength":1}, "run_id": {"type":"string","minLength":1}, "step": {"type":"integer","minimum":0}, "simulation_time": {"type":"integer","minimum":0}, "timestamp": {"type":"string","minLength":1}, "type": {"type":"string","minLength":1}, "message": {"type":"string"} },
+      "required": ["event_id", "run_id", "step", "simulation_time", "timestamp", "type", "message"]
+    },
+    "Metrics": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "escaped":{"type":"boolean"}, "alive":{"type":"boolean"}, "steps_taken":{"type":"integer","minimum":0}, "simulated_time":{"type":"integer","minimum":0}, "final_health":{"type":"integer","minimum":0,"maximum":100}, "final_energy":{"type":"integer","minimum":0,"maximum":100}, "final_hydration":{"type":"integer","minimum":0,"maximum":100}, "invalid_actions":{"type":"integer","minimum":0}, "repeated_invalid_actions":{"type":"integer","minimum":0}, "unique_cells_visited":{"type":"integer","minimum":0}, "useful_items_acquired":{"type":"integer","minimum":0}, "carried_weight":{"type":"integer","minimum":0}, "inventory_weight_capacity":{"type":"integer","minimum":0}, "exploration_coverage":{"type":"number","minimum":0,"maximum":1}, "action_diversity":{"type":"integer","minimum":0}, "repeated_actions":{"type":"integer","minimum":0}, "action_repetition_rate":{"type":"number","minimum":0,"maximum":1}, "resource_efficiency":{"type":"number","minimum":0,"maximum":1}, "hazard_damage_taken":{"type":"integer","minimum":0}, "npc_interactions":{"type":"integer","minimum":0}, "unnecessary_actions":{"type":"integer","minimum":0}, "recovery_after_failure":{"type":"boolean"}, "discovered_doors":{"type":"integer","minimum":0}, "discovered_items":{"type":"integer","minimum":0}, "discovered_hazards":{"type":"integer","minimum":0}, "discovered_npcs":{"type":"integer","minimum":0}, "first_discovery_steps":{"type":"object","additionalProperties":{"type":"integer"}}, "milestones":{"type":"object","additionalProperties":{"type":"integer"}}, "score_task_success":{"type":"number"}, "score_health":{"type":"number"}, "score_invalid_action_penalty":{"type":"number"}, "score_step_penalty":{"type":"number"}, "normalized_score":{"type":"number","minimum":0,"maximum":100}
+      },
+      "required": ["escaped", "alive", "steps_taken", "simulated_time", "final_health", "final_energy", "final_hydration", "invalid_actions", "repeated_invalid_actions", "unique_cells_visited", "useful_items_acquired", "carried_weight", "inventory_weight_capacity", "exploration_coverage", "action_diversity", "repeated_actions", "action_repetition_rate", "resource_efficiency", "hazard_damage_taken", "npc_interactions", "unnecessary_actions", "recovery_after_failure", "discovered_doors", "discovered_items", "discovered_hazards", "discovered_npcs", "first_discovery_steps", "milestones", "score_task_success", "score_health", "score_invalid_action_penalty", "score_step_penalty", "normalized_score"]
+    }
+  }
+}
