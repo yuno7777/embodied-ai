@@ -122,6 +122,11 @@ impl WorldGeneratorConfig {
         {
             return Err(SimError::Scenario("invalid world generator bounds".into()));
         }
+        if self.max_rooms == 3 && self.min_width < 7 {
+            return Err(SimError::Scenario(
+                "three-room worlds require a minimum width of 7".into(),
+            ));
+        }
         Ok(())
     }
 }
@@ -647,6 +652,32 @@ mod tests {
                 .is_err()
             );
         }
+    }
+
+    #[test]
+    fn generator_rejects_a_three_room_config_that_cannot_make_nonempty_rooms() {
+        assert!(
+            WorldGenerator::new(WorldGeneratorConfig {
+                min_width: 6,
+                max_width: 8,
+                min_rooms: 3,
+                max_rooms: 3,
+                ..WorldGeneratorConfig::default()
+            })
+            .is_err()
+        );
+        assert!(
+            WorldGenerator::new(WorldGeneratorConfig {
+                min_width: 7,
+                max_width: 7,
+                min_rooms: 3,
+                max_rooms: 3,
+                ..WorldGeneratorConfig::default()
+            })
+            .unwrap()
+            .generate(1)
+            .is_ok()
+        );
     }
 
     #[test]
