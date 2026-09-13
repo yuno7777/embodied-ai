@@ -93,6 +93,17 @@ def generated_room_count(world_manifest: dict[str, Any] | None) -> int | None:
     return len(rooms) if isinstance(rooms, list) else None
 
 
+def generated_mechanics_signature(world_manifest: dict[str, Any] | None) -> str | None:
+    """Name the joint generated mechanics actually present in a world manifest."""
+    room_count = generated_room_count(world_manifest)
+    hazard_kinds = generated_hazard_kinds(world_manifest)
+    if room_count is None and not hazard_kinds:
+        return None
+    rooms = str(room_count) if room_count is not None else "unknown"
+    hazards = ",".join(hazard_kinds) if hazard_kinds else "none"
+    return f"rooms:{rooms}|hazards:{hazards}"
+
+
 def generator_config_fingerprint(config: Mapping[str, Any] | None) -> str | None:
     """Produce a stable identity for a complete JSON generator configuration."""
     if config is None:
@@ -135,6 +146,7 @@ def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
         )
         hazard_groups: dict[str, list[dict[str, Any]]] = {}
         room_groups: dict[int, list[dict[str, Any]]] = {}
+        mechanics_groups: dict[str, list[dict[str, Any]]] = {}
         for row in rows_for_partition:
             for kind in row.get("hazard_kinds", []):
                 if isinstance(kind, str):
@@ -142,6 +154,9 @@ def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
             room_count = row.get("room_count")
             if isinstance(room_count, int) and room_count > 0:
                 room_groups.setdefault(room_count, []).append(row)
+            mechanics_signature = row.get("mechanics_signature")
+            if isinstance(mechanics_signature, str) and mechanics_signature:
+                mechanics_groups.setdefault(mechanics_signature, []).append(row)
         total_steps = sum(step_counts)
         return {
             "episodes": len(rows_for_partition),
@@ -161,6 +176,10 @@ def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "room_count_breakdown": {
                 str(room_count): stratified_success_summary(items)
                 for room_count, items in sorted(room_groups.items())
+            },
+            "mechanics_breakdown": {
+                signature: stratified_success_summary(items)
+                for signature, items in sorted(mechanics_groups.items())
             },
         }
 
@@ -250,6 +269,7 @@ def evaluate_generalization_remote(
             "world_manifest": result.world_manifest,
             "hazard_kinds": generated_hazard_kinds(result.world_manifest),
             "room_count": generated_room_count(result.world_manifest),
+            "mechanics_signature": generated_mechanics_signature(result.world_manifest),
             "outcome": result.terminal_reason,
             "steps": result.steps,
             "total_reward": sum(record.get("reward", 0) for record in result.records if isinstance(record.get("reward", 0), (int, float))),
@@ -507,9 +527,21 @@ def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) 
             }
             for room_count in sorted(set(left_rooms) | set(right_rooms))
         }
+    def mechanics_deltas(name: str) -> dict[str, dict[str, float | None]]:
+        left_mechanics = left_partitions[name].get("mechanics_breakdown", {})
+        right_mechanics = right_partitions[name].get("mechanics_breakdown", {})
+        if not isinstance(left_mechanics, dict) or not isinstance(right_mechanics, dict):
+            return {}
+        return {
+            signature: {
+                "episodes_delta": delta(left_mechanics.get(signature, {}).get("episodes"), right_mechanics.get(signature, {}).get("episodes")),
+                "success_rate_delta": delta(left_mechanics.get(signature, {}).get("success_rate"), right_mechanics.get(signature, {}).get("success_rate")),
+            }
+            for signature in sorted(set(left_mechanics) | set(right_mechanics))
+        }
     return {
         "engine_version": left.get("engine_version"), "observation_mode": left.get("observation_mode"),
         "left_experiment_id": left.get("experiment_id"), "right_experiment_id": right.get("experiment_id"),
-        "partitions": {name: {**{f"{metric}_delta": delta(left_partitions[name].get(metric), right_partitions[name].get(metric)) for metric in metrics}, "hazard_kind_breakdown": hazard_deltas(name), "room_count_breakdown": room_count_deltas(name)} for name in sorted(expected)},
+        "partitions": {name: {**{f"{metric}_delta": delta(left_partitions[name].get(metric), right_partitions[name].get(metric)) for metric in metrics}, "hazard_kind_breakdown": hazard_deltas(name), "room_count_breakdown": room_count_deltas(name), "mechanics_breakdown": mechanics_deltas(name)} for name in sorted(expected)},
         "generalization_gap": {key + "_delta": delta(left.get("generalization_gap", {}).get(key), right.get("generalization_gap", {}).get(key)) for key in ("train_minus_validation_success_rate", "train_minus_test_success_rate")},
     }
