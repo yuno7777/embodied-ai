@@ -61,3 +61,6 @@ The latest checked local Windows baseline was captured with the command above on
 | `survival_room/step_move` | 2.7601–2.9022 µs |
 
 These measurements exclude HTTP, rendering, disk persistence, and provider latency. They are a regression reference for this machine, not a portable performance claim.
+# Benchmarking protocol
+
+Generalization reports evaluate a fixed provider over explicit train, validation, and test seed lists. Treat the generator configuration and observation mode as experimental inputs, not presentation settings: both are persisted in the immutable experiment manifest and report. Do not compare a restricted-perception result against an `oracle` result as if they measured the same task.
