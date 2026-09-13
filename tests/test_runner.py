@@ -197,9 +197,11 @@ def test_authoritative_run_creation_forwards_reward_configuration():
             calls.append((path, json)); return Response()
     client = object.__new__(RustRunClient)
     client.client = Client()
-    reward_config = {"baseline_per_step": -3, "discovery_bonus": 7}
+    reward_config = {"baseline_per_step": -3, "discovery_bonus": 7, "invalid_action_penalty": -4, "terminal_success": 50, "terminal_failure": -60}
     client.create(42, reward_config=reward_config)
     assert calls[0][1]["reward_config"] == reward_config
+    with pytest.raises(ValidationError, match="terminal_success"):
+        client.create(42, reward_config={"baseline_per_step": -3})
 
 
 def test_rust_client_fetches_authoritative_replay_metadata():

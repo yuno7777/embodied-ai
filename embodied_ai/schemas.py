@@ -113,6 +113,16 @@ class RewardBreakdown(BaseModel):
     terminal: int
 
 
+class RewardConfig(BaseModel):
+    """Complete evaluator profile accepted by the authoritative Rust create API."""
+    model_config = ConfigDict(extra="forbid")
+    baseline_per_step: int
+    discovery_bonus: int
+    invalid_action_penalty: int
+    terminal_success: int
+    terminal_failure: int
+
+
 class Event(BaseModel):
     """Authoritative event emitted by a completed Rust transition."""
     model_config = ConfigDict(extra="forbid")

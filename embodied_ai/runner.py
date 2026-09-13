@@ -6,7 +6,7 @@ from typing import Any
 from dataclasses import dataclass, field
 import httpx
 from .context import AgentContext
-from .schemas import ActionResult, AgentDecision, ActionRequest, Observation, WorldManifest
+from .schemas import ActionResult, AgentDecision, ActionRequest, Observation, RewardConfig, WorldManifest
 
 @dataclass
 class RemoteRunResult:
@@ -42,7 +42,7 @@ class RustRunClient:
         if generated_world is not None:
             request["generated_world"] = generated_world
         if reward_config is not None:
-            request["reward_config"] = reward_config
+            request["reward_config"] = RewardConfig.model_validate(reward_config).model_dump(mode="json")
         if max_steps is not None: request["max_steps"] = max_steps
         request["observation_mode"] = observation_mode
         return self._with_validated_observation(self.client.post("/api/runs", json=request).raise_for_status().json())
