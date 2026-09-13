@@ -32,6 +32,8 @@ Python trajectory exports record `agent_context` beside each observation. It is 
 
 Policy-local state is explicitly separate from that runner-owned context. `run_remote` and the `run` CLI record `policy_state_mode`: `reset` (the default) invokes the policy reset hook with the run seed; `preserve` leaves a reused policy instance intact for a deliberately labeled continual-memory experiment. Neither mode changes Rust world reset semantics, and each trajectory row plus experiment manifest records the selected mode.
 
+Persisted experiment manifests include a canonical fingerprint. `audit-experiment` verifies that fingerprint locally and can bind a JSONL trajectory to the exact experiment ID, observation mode, generated-world manifest, and policy-state mode. This is provenance validation, not a replay substitute: Rust replay reconstruction remains the authority for world-transition determinism.
+
 For offline world-model research, the headless CLI may be invoked with `--include-research-snapshots`. That explicit local opt-in records a before/after `WorldSnapshot` pair beside each transition as `research_snapshot` and `next_research_snapshot`; it does not alter either the observation or provider context. Dataset conversion excludes the privileged pair unless its caller explicitly requests privileged state.
 
 `embodied-ai audit-dataset --trajectory <run.jsonl>` provides a local coverage report for exported transitions, action/outcome mix, sensor modes, policy-state lifecycle modes, metadata-field presence, exact next-observation availability, and complete versus partial privileged snapshot pairs. It reports metadata coverage only, never metadata values or privileged snapshots.

@@ -106,6 +106,7 @@ python -m embodied_ai.cli generalize --provider cautious --train-generator-confi
 python -m embodied_ai.cli generalize --provider cautious --observation-mode noisy --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli audit-generalization --report data/exports/generalization/generalization_report.json
 python -m embodied_ai.cli audit-dataset --trajectory data/runs/YOUR_RUN.jsonl
+python -m embodied_ai.cli audit-experiment --manifest data/runs/YOUR_EXPERIMENT.experiment.json --trajectory data/runs/YOUR_RUN.jsonl
 python -m embodied_ai.cli compare-generalization --left data/exports/experiment-a/generalization_report.json --right data/exports/experiment-b/generalization_report.json
 python -m embodied_ai.cli train-tabular --episodes 100 --checkpoint data/checkpoints/tabular_q.json --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli evaluate-tabular --checkpoint data/checkpoints/tabular_q.json --seed-start 9000 --episodes 20 --server-url http://127.0.0.1:8080
@@ -128,6 +129,8 @@ Start the Rust server before either command. Rust events are persisted as replay
 `compare-generalization` compares split metrics, held-out gaps, hazard-kind success rates, room-topology success rates, and joint mechanics success rates only after verifying complete provenance: report and engine versions, sensor mode, seed distribution, generator configuration, and (when present) every episode row against its declared split and summary. It rejects missing or incompatible metadata instead of producing misleading deltas.
 
 `audit-generalization` performs that provenance check on one report and emits a compact receipt containing its experimental conditions, canonical generator-config fingerprints, split counts, and whether episode-level evidence was checked. It is local and read-only; use it before comparing, archiving, or sharing a report.
+
+`audit-experiment` is the corresponding local, read-only check for one immutable experiment manifest. It first verifies the persisted fingerprint, then, when given a JSONL trajectory, requires every row to carry the same experiment ID, observation mode, generated-world manifest, and configured policy-state mode. It rejects mixed run IDs or altered provenance instead of treating nearby-looking artifacts as one experiment.
 
 Benchmark summaries report control wall-clock measurements and mean episode-initialization latency separately from `simulation_steps_per_second`, which is derived from the Rust server's authoritative per-step simulation timings. Initialization latency is local Rust HTTP/create overhead, not a simulator-throughput claim; provider/model latency is likewise not presented as simulator throughput.
 
