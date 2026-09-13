@@ -84,6 +84,8 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8080/api/runs -ContentType appli
 
 The response contains an immutable `world_manifest` with generator version, seed, hash, generation attempt, dimensions, scenario definition, and solvability validation. Default train, validation, and test seed partitions are disjoint; evaluation must use held-out partition seeds.
 
+To ask Rust which default partition owns a seed, use `GET /api/worlds/partition/{seed}`. Seeds outside the configured distribution return `404` instead of being guessed.
+
 ```powershell
 python -m embodied_ai.cli run --scenario survival_room --provider scripted --seed 42 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --generated-world-seed 42 --provider random_valid --seed 42 --server-url http://127.0.0.1:8080
