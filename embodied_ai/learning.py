@@ -10,6 +10,17 @@ from typing import Any, Callable
 from .schemas import ActionRequest
 
 
+def _episode_result(seed: int, step: int, total_reward: float, terminal_reason: str | None, info: dict[str, Any]) -> dict[str, Any]:
+    """Preserve evaluator-only metrics beside an episode without policy exposure."""
+    metrics = info.get("evaluator", {}).get("metrics", {}) if isinstance(info.get("evaluator"), dict) else {}
+    return {
+        "seed": seed, "steps": step, "total_reward": total_reward, "terminal_reason": terminal_reason,
+        "invalid_actions": metrics.get("invalid_actions"),
+        "exploration_coverage": metrics.get("exploration_coverage"),
+        "resource_efficiency": metrics.get("resource_efficiency"),
+    }
+
+
 @dataclass(frozen=True)
 class TabularQConfig:
     learning_rate: float = 0.2
@@ -166,17 +177,19 @@ def train_tabular_q(
             else:
                 observation, _ = environment.reset(seed=seed)
             total_reward = 0.0
+            last_info: dict[str, Any] = {}
             for step in range(1, max_steps + 1):
                 action = policy.act(observation)
                 next_observation, reward, terminated, truncated, info = environment.step(action)
+                last_info = info
                 done = terminated or truncated
                 policy.update(observation, action, reward, next_observation, done)
                 observation, total_reward = next_observation, total_reward + reward
                 if done:
-                    episodes.append({"seed": seed, "steps": step, "total_reward": total_reward, "terminal_reason": info.get("terminal_reason")})
+                    episodes.append(_episode_result(seed, step, total_reward, info.get("terminal_reason"), info))
                     break
             else:
-                episodes.append({"seed": seed, "steps": max_steps, "total_reward": total_reward, "terminal_reason": "trainer_step_limit"})
+                episodes.append(_episode_result(seed, max_steps, total_reward, "trainer_step_limit", last_info))
     return episodes
 
 
@@ -199,14 +212,16 @@ def evaluate_tabular_q(
                 else:
                     observation, _ = environment.reset(seed=seed)
                 total_reward = 0.0
+                last_info: dict[str, Any] = {}
                 for step in range(1, max_steps + 1):
                     next_observation, reward, terminated, truncated, info = environment.step(policy.act(observation))
+                    last_info = info
                     observation, total_reward = next_observation, total_reward + reward
                     if terminated or truncated:
-                        episodes.append({"seed": seed, "steps": step, "total_reward": total_reward, "terminal_reason": info.get("terminal_reason")})
+                        episodes.append(_episode_result(seed, step, total_reward, info.get("terminal_reason"), info))
                         break
                 else:
-                    episodes.append({"seed": seed, "steps": max_steps, "total_reward": total_reward, "terminal_reason": "evaluator_step_limit"})
+                    episodes.append(_episode_result(seed, max_steps, total_reward, "evaluator_step_limit", last_info))
         return episodes
     finally:
         policy.config = TabularQConfig(policy.config.learning_rate, policy.config.discount, original_epsilon)

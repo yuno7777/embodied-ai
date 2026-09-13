@@ -32,6 +32,29 @@ def test_tabular_q_training_uses_rl_style_environment_only():
     assert all(episode["total_reward"] == 2 for episode in episodes)
 
 
+def test_tabular_episodes_preserve_evaluator_metrics_without_policy_access():
+    class Environment:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def reset(self, *, seed): return observation(), {}
+        def step(self, _action): return observation(), 2, True, False, {"terminal_reason": "escaped", "evaluator": {"metrics": {"invalid_actions": 0, "exploration_coverage": .5, "resource_efficiency": .8}}}
+    result = evaluate_tabular_q(Environment, TabularQPolicy(), [1])[0]
+    assert result["invalid_actions"] == 0
+    assert result["exploration_coverage"] == .5
+    assert result["resource_efficiency"] == .8
+
+
+def test_tabular_step_limits_keep_the_last_authoritative_evaluator_metrics():
+    class Environment:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def reset(self, *, seed): return observation(), {}
+        def step(self, _action): return observation(), 1, False, False, {"terminal_reason": None, "evaluator": {"metrics": {"exploration_coverage": .25}}}
+    result = evaluate_tabular_q(Environment, TabularQPolicy(), [1], max_steps=1)[0]
+    assert result["terminal_reason"] == "evaluator_step_limit"
+    assert result["exploration_coverage"] == .25
+
+
 def test_tabular_q_proposes_only_locally_visible_object_actions():
     policy = TabularQPolicy(TabularQConfig(epsilon=0), seed=1)
     observed = observation()
