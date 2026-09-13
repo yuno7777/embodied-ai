@@ -22,6 +22,12 @@ def test_benchmark_provider_factory_rejects_unknown_provider():
         raise AssertionError("unknown provider silently selected a policy")
 
 
+def test_generator_config_fingerprint_is_canonical_and_sensitive_to_values():
+    assert benchmark.generator_config_fingerprint({"max_rooms": 3, "min_rooms": 2}) == benchmark.generator_config_fingerprint({"min_rooms": 2, "max_rooms": 3})
+    assert benchmark.generator_config_fingerprint({"min_rooms": 2}) != benchmark.generator_config_fingerprint({"min_rooms": 3})
+    assert benchmark.generator_config_fingerprint(None) is None
+
+
 def test_benchmark_slices_keep_events_and_decisions_separate():
     events, decisions = benchmark.benchmark_slices([{
         "run_id": "r", "scenario_id": "s", "scenario_version": 1, "seed": 2, "step": 3,
@@ -178,6 +184,8 @@ def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monk
     assert all("world_manifest" in episode for episode in report["episode_results"])
     assert all(episode["hazard_kinds"] == ["fire"] for episode in report["episode_results"])
     assert all(episode["room_count"] == 3 for episode in report["episode_results"])
+    assert report["generator_config_fingerprint"] == benchmark.generator_config_fingerprint({"min_width": 9, "max_width": 9})
+    assert all(episode["generator_config_fingerprint"] == report["generator_config_fingerprint"] for episode in report["episode_results"])
     assert (tmp_path / "generalization_report.json").exists()
     assert (tmp_path / "generalization_episodes.jsonl").exists()
     manifest = tmp_path / report["experiment_manifest"]

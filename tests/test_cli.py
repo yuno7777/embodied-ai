@@ -204,4 +204,5 @@ def test_tabular_generalization_cli_trains_once_and_reports_disjoint_partitions(
     assert '"success_rate": 1.0' in (tmp_path/'report'/'tabular_generalization_report.json').read_text()
     report = __import__('json').loads((tmp_path/'report'/'tabular_generalization_report.json').read_text())
     assert report['engine_version'] == 'rust-v1' and report['generator_config'] == {'min_rooms': 2, 'max_rooms': 2}
+    assert report['generator_config_fingerprint'] == cli.generator_config_fingerprint({'min_rooms': 2, 'max_rooms': 2})
     assert cli.audit_generalization_report(report)['valid'] is True

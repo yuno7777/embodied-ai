@@ -1,4 +1,5 @@
 from __future__ import annotations
+import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
@@ -90,6 +91,17 @@ def generated_room_count(world_manifest: dict[str, Any] | None) -> int | None:
     scenario = world_manifest.get("scenario") if isinstance(world_manifest, dict) else None
     rooms = scenario.get("rooms") if isinstance(scenario, dict) else None
     return len(rooms) if isinstance(rooms, list) else None
+
+
+def generator_config_fingerprint(config: Mapping[str, Any] | None) -> str | None:
+    """Produce a stable identity for a complete JSON generator configuration."""
+    if config is None:
+        return None
+    try:
+        encoded = json.dumps(dict(config), sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    except (TypeError, ValueError) as error:
+        raise ValueError("generator configuration must be JSON-serializable") from error
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def stratified_success_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -192,6 +204,12 @@ def evaluate_generalization_remote(
         if generator_configs_by_partition is not None
         else None
     )
+    shared_config_fingerprint = generator_config_fingerprint(generator_config)
+    partition_config_fingerprints = (
+        {name: generator_config_fingerprint(config) for name, config in partition_configs.items()}
+        if partition_configs is not None
+        else None
+    )
     manifest = ExperimentManifest(
         scenario_id="procedural",
         seed=plan.train.seeds[0],
@@ -240,6 +258,7 @@ def evaluate_generalization_remote(
             "resource_efficiency": metrics.get("resource_efficiency"),
             "control_elapsed_ms": final.get("control_elapsed_ms"),
             "generator_config": dict(selected_config) if selected_config is not None else None,
+            "generator_config_fingerprint": generator_config_fingerprint(selected_config),
             "observation_mode": observation_mode,
         }
 
@@ -256,6 +275,8 @@ def evaluate_generalization_remote(
         "world_distribution": plan.as_dict(),
         "generator_config": dict(generator_config) if generator_config is not None else None,
         "generator_configs_by_partition": partition_configs,
+        "generator_config_fingerprint": shared_config_fingerprint,
+        "generator_config_fingerprints_by_partition": partition_config_fingerprints,
         "episode_results": rows,
     }
     (output / "generalization_report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -389,6 +410,16 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
     if configs_by_partition is not None:
         if shared_config is not None or not isinstance(configs_by_partition, dict) or set(configs_by_partition) != {"train", "validation", "test"} or any(not isinstance(config, dict) for config in configs_by_partition.values()):
             raise ValueError("generalization generator configs by partition must be complete objects without a shared config")
+    expected_shared_fingerprint = generator_config_fingerprint(shared_config)
+    expected_partition_fingerprints = (
+        {name: generator_config_fingerprint(config) for name, config in configs_by_partition.items()}
+        if configs_by_partition is not None
+        else None
+    )
+    if "generator_config_fingerprint" in report and report.get("generator_config_fingerprint") != expected_shared_fingerprint:
+        raise ValueError("generalization generator_config_fingerprint does not match generator_config")
+    if "generator_config_fingerprints_by_partition" in report and report.get("generator_config_fingerprints_by_partition") != expected_partition_fingerprints:
+        raise ValueError("generalization generator config fingerprints do not match partition configs")
     partitions = report.get("partitions")
     if not isinstance(partitions, dict) or set(partitions) != {"train", "validation", "test"}:
         raise ValueError("generalization report requires train, validation, and test summaries")
@@ -407,6 +438,8 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
         expected_config = configs_by_partition.get(row["partition"]) if isinstance(configs_by_partition, dict) else shared_config
         if row.get("generator_config") != expected_config:
             raise ValueError("generalization episodes must match the report generator configuration")
+        if "generator_config_fingerprint" in row and row.get("generator_config_fingerprint") != generator_config_fingerprint(expected_config):
+            raise ValueError("generalization episode generator configuration fingerprint does not match")
     for name, summary in partitions.items():
         if not isinstance(summary, dict):
             raise ValueError("generalization partition summaries must be objects")
@@ -429,6 +462,8 @@ def audit_generalization_report(report: dict[str, Any]) -> dict[str, Any]:
         "episode_provenance_checked": isinstance(episodes, list),
         "episode_count": len(episodes) if isinstance(episodes, list) else None,
         "world_distribution": report["world_distribution"],
+        "generator_config_fingerprint": report.get("generator_config_fingerprint"),
+        "generator_config_fingerprints_by_partition": report.get("generator_config_fingerprints_by_partition"),
         "partition_episode_counts": {
             name: report["partitions"][name].get("episodes")
             for name in ("train", "validation", "test")
