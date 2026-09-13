@@ -2,7 +2,7 @@
 
 The canonical protocol version is `1`. A provider receives an `Observation` and returns one `ActionRequest`; it never receives a `WorldSnapshot` or a mutation channel. `Observation.agent` is an `AgentObservation`, deliberately excluding agent identity and absolute position. Local NPC observations exclude hidden trust values, and room identifiers are researcher-only. `StepResult` contains the new filtered observation, reward, terminal information and structured events. `WorldSnapshot` is researcher-only.
 
-The committed [ActionRequest JSON Schema](../schemas/action-request.v1.json) is the versioned wire artifact. Python, Rust, and the observer enforce the same action vocabulary; Rust remains the final strict validation boundary.
+The committed [ActionRequest JSON Schema](../schemas/action-request.v1.json) and [AgentDecision JSON Schema](../schemas/agent-decision.v1.json) are the versioned wire artifacts. Python, Rust, and the observer enforce the same action vocabulary and decision metadata envelope; Rust remains the final strict validation boundary.
 
 Action values are validated at the Python provider boundary and again by the Rust engine. Wire schemas are defined in `embodied_ai/schemas.py`; the Rust equivalents live in `rust/crates/sim-core`.
 
