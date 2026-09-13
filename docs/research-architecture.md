@@ -32,7 +32,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 - Replays persist generated manifests and reward configurations; replay verification checks these inputs before declaring two executions comparable.
 - Generalization evaluation reports train/validation/test success, Wilson intervals, reward, invalid-action rate, exploration, efficiency, failures, and held-out gaps.
 - Benchmark reporting separates authoritative simulation throughput from control and provider latency.
-- A lightweight tabular Q-learning baseline trains through the Rust environment, persists a JSON checkpoint, reloads it, and evaluates greedily on held-out generated seeds. It was smoke-tested with two train and two held-out episodes against a local Rust process.
+- A lightweight tabular Q-learning baseline trains through the Rust environment, persists a JSON checkpoint, reloads it, and evaluates greedily on held-out generated seeds. The locally visible-object action path was smoke-tested with two train and two held-out episodes against a local Rust process; this was lifecycle verification, not a performance claim.
 
 ## Partial
 
