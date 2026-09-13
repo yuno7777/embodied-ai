@@ -70,6 +70,12 @@ def test_generalization_comparison_requires_matching_conditions_and_reports_delt
         assert "observation_mode" in str(error)
     else:
         raise AssertionError("incompatible sensor reports were compared")
+    try:
+        benchmark.compare_generalization_reports({key: value for key, value in base.items() if key != "engine_version"}, right)
+    except ValueError as error:
+        assert "engine_version" in str(error)
+    else:
+        raise AssertionError("reports with missing provenance were compared")
 
 
 def test_generalization_plan_rejects_overlapping_seed_sets():

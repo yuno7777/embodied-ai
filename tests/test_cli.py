@@ -182,3 +182,5 @@ def test_tabular_generalization_cli_trains_once_and_reports_disjoint_partitions(
     assert captured['test_options']['generated_world']['seed'] == 9000
     assert (tmp_path/'report'/'tabular_generalization_report.json').exists()
     assert '"success_rate": 1.0' in (tmp_path/'report'/'tabular_generalization_report.json').read_text()
+    report = __import__('json').loads((tmp_path/'report'/'tabular_generalization_report.json').read_text())
+    assert report['engine_version'] == 'rust-v1' and report['generator_config'] == {'min_rooms': 2, 'max_rooms': 2}

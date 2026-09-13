@@ -323,15 +323,34 @@ def compare_benchmarks(left: dict, right: dict) -> dict:
     }
 
 
+def validate_generalization_report(report: dict[str, Any]) -> None:
+    """Reject incomplete provenance before a research comparison is attempted."""
+    if not isinstance(report, dict):
+        raise ValueError("generalization report must be an object")
+    if report.get("report_version") != 1 or not isinstance(report.get("engine_version"), str) or not report["engine_version"]:
+        raise ValueError("generalization report requires report_version and engine_version")
+    if report.get("observation_mode") not in {"minimal", "normal", "rich", "noisy", "oracle"}:
+        raise ValueError("generalization report requires a supported observation_mode")
+    distribution = report.get("world_distribution")
+    if not isinstance(distribution, dict) or set(distribution) != {"train", "validation", "test"}:
+        raise ValueError("generalization report requires train, validation, and test world_distribution")
+    seeds = [seed for values in distribution.values() if isinstance(values, list) for seed in values]
+    if any(not isinstance(seed, int) or seed < 0 for seed in seeds) or len(seeds) != len(set(seeds)):
+        raise ValueError("generalization world_distribution seeds must be non-negative and disjoint")
+    partitions = report.get("partitions")
+    if not isinstance(partitions, dict) or set(partitions) != {"train", "validation", "test"}:
+        raise ValueError("generalization report requires train, validation, and test summaries")
+
+
 def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     """Compare only reports produced under identical experimental conditions."""
+    validate_generalization_report(left)
+    validate_generalization_report(right)
     for field in ("report_version", "engine_version", "observation_mode", "world_distribution", "generator_config", "generator_configs_by_partition"):
         if left.get(field) != right.get(field):
             raise ValueError(f"generalization reports must match {field}")
     expected = {"train", "validation", "test"}
     left_partitions, right_partitions = left.get("partitions"), right.get("partitions")
-    if not isinstance(left_partitions, dict) or not isinstance(right_partitions, dict) or set(left_partitions) != expected or set(right_partitions) != expected:
-        raise ValueError("reports must contain train, validation, and test summaries")
     metrics = ("success_rate", "mean_episode_reward", "mean_episode_length", "invalid_action_rate", "mean_exploration_coverage", "mean_resource_efficiency", "steps_per_second")
     def delta(left_value: Any, right_value: Any) -> float | None:
         return right_value - left_value if isinstance(left_value, (int, float)) and isinstance(right_value, (int, float)) else None

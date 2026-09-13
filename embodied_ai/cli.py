@@ -138,7 +138,7 @@ def main():
         rows=[{'partition':partition, 'outcome':episode['terminal_reason'], **episode} for partition,episodes in evaluated.items() for episode in episodes]
         manifest=ExperimentManifest(scenario_id='procedural',seed=args.train_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={'config':generator_config} if generator_config is not None else {},world_distribution={name:tuple(seeds) for name,seeds in partitions.items()},agent_config={'algorithm':'tabular_q','checkpoint':str(checkpoint),'learning_rate':args.learning_rate,'discount':args.discount,'epsilon':args.epsilon,'phase':'train_validate_test'})
         manifest_path=manifest.persist(args.output)
-        report=summarize_generalization(rows) | {'experiment_id':manifest.experiment_id,'experiment_manifest':manifest_path.name,'checkpoint':str(checkpoint),'observation_mode':args.observation_mode,'world_distribution':partitions,'episode_results':rows}
+        report=summarize_generalization(rows) | {'experiment_id':manifest.experiment_id,'experiment_manifest':manifest_path.name,'checkpoint':str(checkpoint),'engine_version':'rust-v1','observation_mode':args.observation_mode,'world_distribution':partitions,'generator_config':generator_config,'generator_configs_by_partition':None,'episode_results':rows}
         (args.output/'tabular_generalization_report.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n',encoding='utf-8'); export_jsonl(rows,args.output/'tabular_generalization_episodes.jsonl')
         print(json.dumps(report,indent=2))
     elif args.cmd=='analyze':
