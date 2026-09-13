@@ -29,6 +29,8 @@ class RustRunClient:
             response["observation"] = self._validate_observation(response["observation"])
         if response.get("world_manifest") is not None:
             response["world_manifest"] = WorldManifest.model_validate(response["world_manifest"]).model_dump(mode="json")
+        if response.get("reward_config") is not None:
+            response["reward_config"] = RewardConfig.model_validate(response["reward_config"]).model_dump(mode="json")
         return response
     @staticmethod
     def _validate_action_result(payload: dict) -> dict:
@@ -74,10 +76,11 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
         if resume_run_id is not None and restore_replay_id is not None: raise ValueError("choose either a live run or a persisted replay to resume")
         scenario: dict[str, object] | None = None
         world_manifest: dict | None = None
+        effective_reward_config: dict[str, int] | None = None
         if restore_replay_id is not None:
             initialization_started=time.perf_counter(); restored=client.restore(restore_replay_id); initialization_latency_ms=(time.perf_counter()-initialization_started)*1000; run_id=restored["run_id"]; observation=restored["observation"]; steps=restored["snapshot"]["step"]
         elif resume_run_id is None:
-            initialization_started=time.perf_counter(); created=client.create(seed, max_steps, observation_mode, scenario_id, generated_world, reward_config); initialization_latency_ms=(time.perf_counter()-initialization_started)*1000; run_id=created["run_id"]; observation=created["observation"]; steps=0
+            initialization_started=time.perf_counter(); created=client.create(seed, max_steps, observation_mode, scenario_id, generated_world, reward_config); initialization_latency_ms=(time.perf_counter()-initialization_started)*1000; run_id=created["run_id"]; observation=created["observation"]; steps=0; effective_reward_config=created.get("reward_config")
             manifest = created.get("world_manifest")
             world_manifest = manifest if isinstance(manifest, dict) else None
             if isinstance(manifest, dict) and isinstance(manifest.get("scenario"), dict):
@@ -132,7 +135,7 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 if scenario is None:
                     scenario = client.scenarios()[0]
                 next_research_snapshot = client.snapshot(run_id) if include_research_snapshots else None
-                records.append({"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"simulation_time":result.get("simulation_time"),"observation_mode":observation_mode,"policy_state_mode":policy_state_mode,"initialization_latency_ms":initialization_latency_ms,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"agent_metadata":agent_metadata,"events":result["events"],"reward":result["reward"],"reward_breakdown":result.get("reward_breakdown"),"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
+                records.append({"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"reward_config":effective_reward_config,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"simulation_time":result.get("simulation_time"),"observation_mode":observation_mode,"policy_state_mode":policy_state_mode,"initialization_latency_ms":initialization_latency_ms,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"agent_metadata":agent_metadata,"events":result["events"],"reward":result["reward"],"reward_breakdown":result.get("reward_breakdown"),"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
                 if include_research_snapshots:
                     records[-1]["research_snapshot"] = research_snapshot
                     records[-1]["next_research_snapshot"] = next_research_snapshot

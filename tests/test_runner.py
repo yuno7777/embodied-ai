@@ -228,6 +228,18 @@ def test_authoritative_run_creation_forwards_reward_configuration():
         client.create(42, reward_config={"baseline_per_step": -3})
 
 
+def test_rust_client_rejects_malformed_effective_reward_config_from_creation():
+    class Response:
+        def raise_for_status(self): return self
+        def json(self): return {"run_id": "r", "reward_config": {"baseline_per_step": -1}}
+    class Client:
+        def post(self, _path, json): return Response()
+    client = object.__new__(RustRunClient)
+    client.client = Client()
+    with pytest.raises(ValidationError, match="discovery_bonus"):
+        client.create(7)
+
+
 def test_committed_reward_config_schema_matches_canonical_python_model():
     schema = json.loads((Path(__file__).parents[1] / "schemas" / "reward-config.v1.json").read_text())
     generated = RewardConfig.model_json_schema()
@@ -291,7 +303,7 @@ def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch)
 def test_trajectory_preserves_authoritative_reward_components_and_simulation_time(monkeypatch):
     class Client:
         def __init__(self, _base_url): pass
-        def create(self, *_args): return {"run_id": "r", "observation": {"allowed_action_types": ["wait"]}}
+        def create(self, *_args): return {"run_id": "r", "observation": {"allowed_action_types": ["wait"]}, "reward_config": {"baseline_per_step": -1, "discovery_bonus": 5, "invalid_action_penalty": -2, "terminal_success": 100, "terminal_failure": -100}}
         def scenarios(self): return [{"id": "survival_room", "version": 3}]
         def status(self, _run_id): return {"done": False, "paused": False, "step": 0}
         def record_decision(self, *_args): return {}
@@ -304,6 +316,7 @@ def test_trajectory_preserves_authoritative_reward_components_and_simulation_tim
     monkeypatch.setattr(runner, "RustRunClient", Client)
     record = runner.run_remote(Provider(), 7).records[0]
     assert record["simulation_time"] == 3
+    assert record["reward_config"]["terminal_success"] == 100
     assert record["reward_breakdown"] == {"baseline": -1, "progress": 5, "invalid_action_penalty": 0, "hazard_penalty": 0, "terminal": 5}
 
 
