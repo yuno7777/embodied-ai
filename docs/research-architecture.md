@@ -35,6 +35,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 - Benchmark reporting separates authoritative simulation throughput from control and provider latency.
 - A lightweight tabular Q-learning baseline trains through the Rust environment, persists a JSON checkpoint, reloads it, and evaluates greedily on explicit disjoint train/validation/test seed partitions. The locally visible-object action path was smoke-tested with two train and two held-out episodes against a local Rust process; this was lifecycle verification, not a performance claim.
 - `CallablePolicy` provides a narrow adapter for custom planners or future learned policies: it receives only a public observation and returns a validated typed action through the same Rust authority boundary.
+- `public_action_candidates` is the shared public-observation helper for lightweight policies. It proposes only permitted basic actions, adjacent openable targets, co-located visible items, and carried items; Rust still validates every submitted action.
 
 ## Partial
 
