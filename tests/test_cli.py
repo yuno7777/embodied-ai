@@ -34,3 +34,14 @@ def test_run_cli_requests_a_generated_world_and_records_its_manifest(monkeypatch
     assert captured["scenario_id"] is None
     assert captured["generated_world"] == {"seed": 99}
     assert list(tmp_path.glob("*.experiment.json"))
+
+
+def test_run_cli_forwards_a_generator_config_file(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(cli, "run_remote", lambda *_args, **kwargs: (captured.update(kwargs) or RemoteRunResult("run-1", "timeout", 0, [])))
+    monkeypatch.setattr(cli, "export_jsonl", lambda _records, path: path)
+    monkeypatch.setattr(cli, "export_parquet", lambda _records, _path: None)
+    config = tmp_path / "generator.json"; config.write_text('{"min_width":9,"max_width":9}')
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "run", "--generated-world-seed", "99", "--generator-config", str(config), "--server-url", "http://sim", "--output", str(tmp_path)])
+    cli.main()
+    assert captured["generated_world"] == {"seed": 99, "config": {"min_width": 9, "max_width": 9}}

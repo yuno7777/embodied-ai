@@ -87,6 +87,7 @@ The response contains an immutable `world_manifest` with generator version, seed
 ```powershell
 python -m embodied_ai.cli run --scenario survival_room --provider scripted --seed 42 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --generated-world-seed 42 --provider random_valid --seed 42 --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli run --generated-world-seed 42 --generator-config generator-config.json --provider random_valid --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli benchmark --scenario survival_room --provider scripted --runs 20 --seed-start 1000 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli benchmark-scale --provider random_valid --runs 64 --workers 1,8,32,64 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli generalize --provider scripted --train-start 0 --train-count 20 --validation-start 1000 --validation-count 10 --test-start 2000 --test-count 10 --server-url http://127.0.0.1:8080
