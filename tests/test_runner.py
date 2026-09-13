@@ -1,4 +1,4 @@
-from embodied_ai.schemas import ActionRequest, ActionResult, Observation, WorldManifest
+from embodied_ai.schemas import ActionRequest, ActionResult, Observation, RewardConfig, WorldManifest
 from embodied_ai.schemas import AgentDecision
 from embodied_ai.runner import RustRunClient
 from embodied_ai import runner
@@ -202,6 +202,14 @@ def test_authoritative_run_creation_forwards_reward_configuration():
     assert calls[0][1]["reward_config"] == reward_config
     with pytest.raises(ValidationError, match="terminal_success"):
         client.create(42, reward_config={"baseline_per_step": -3})
+
+
+def test_committed_reward_config_schema_matches_canonical_python_model():
+    schema = json.loads((Path(__file__).parents[1] / "schemas" / "reward-config.v1.json").read_text())
+    generated = RewardConfig.model_json_schema()
+    assert schema["additionalProperties"] == generated["additionalProperties"] is False
+    assert schema["required"] == generated["required"]
+    assert set(schema["properties"]) == set(generated["properties"])
 
 
 def test_rust_client_fetches_authoritative_replay_metadata():

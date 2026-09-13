@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://embodied-worlds.local/schemas/reward-config.v1.json",
+  "title": "RewardConfig",
+  "description": "Canonical v1 evaluator profile supplied when creating an authoritative run.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "baseline_per_step": { "type": "integer" },
+    "discovery_bonus": { "type": "integer" },
+    "invalid_action_penalty": { "type": "integer" },
+    "terminal_success": { "type": "integer" },
+    "terminal_failure": { "type": "integer" }
+  },
+  "required": ["baseline_per_step", "discovery_bonus", "invalid_action_penalty", "terminal_success", "terminal_failure"]
+}
