@@ -76,13 +76,19 @@ Generate a deterministic symbolic world without starting an episode:
 Invoke-RestMethod -Method Post http://127.0.0.1:8080/api/worlds/generate -ContentType application/json -Body '{"seed":42}'
 ```
 
+For a built-in split experiment, assert the partition at generation time. Rust rejects a seed that does not belong to the requested partition:
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8080/api/worlds/generate -ContentType application/json -Body '{"seed":9000,"partition":"test"}'
+```
+
 Start an authoritative episode directly from that generator family:
 
 ```powershell
 Invoke-RestMethod -Method Post http://127.0.0.1:8080/api/runs -ContentType application/json -Body '{"generated_world":{"seed":42}}'
 ```
 
-The response contains an immutable `world_manifest` with generator version, seed, hash, generation attempt, dimensions, scenario definition, and solvability validation. Default train, validation, and test seed partitions are disjoint; evaluation must use held-out partition seeds.
+The response contains an immutable `world_manifest` with generator version, seed, hash, generation attempt, dimensions, scenario definition, and solvability validation. Default train, validation, and test seed partitions are disjoint. A procedural request may assert one of those partitions (`train`, `validation`, or `test`); custom experimental seed lists remain manifest-defined.
 
 To ask Rust which default partition owns a seed, use `GET /api/worlds/partition/{seed}`. Seeds outside the configured distribution return `404` instead of being guessed.
 

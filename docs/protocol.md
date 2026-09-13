@@ -18,6 +18,8 @@ Each replay pairs its initial and per-step researcher `timeline` snapshots with 
 
 `GET /api/scenarios/{id}` returns the validated scenario definition for an available scenario. `GET /api/benchmarks` returns authoritative aggregates over persisted and live run snapshots; it reports completed-run outcome, resource, score, invalid-action, hazard, simulated-time, provider-call, available decision-latency, and supplied input/output-token summaries without fabricating token or cost data.
 
+`POST /api/worlds/generate` and `generated_world` run requests may include a `partition` of `train`, `validation`, or `test`. When supplied, Rust verifies that the generated-world seed belongs to the named built-in distribution before generation. This is an optional assertion for standard experiments, not a replacement for explicitly recorded custom seed-list distributions.
+
 Before the runner submits a model action, it records `POST /api/runs/{id}/decision` with the strictly validated action, concise decision summary, provider/model identity, measured provider latency, and optional SDK token usage. The server broadcasts an `agent_decision` message and persists the record in the replay; it remains non-authoritative until the normal step endpoint validates and executes the action.
 
 `GET /api/runs/{id}/status` exposes only orchestration control state (`paused`, `done`, terminal reason, and step). Provider workers check it before every model request, so a paused run waits without consuming another provider turn and an aborted run exits cleanly.
