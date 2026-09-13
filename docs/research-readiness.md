@@ -14,4 +14,4 @@ Scores are deliberately conservative: 0 means absent, 5 means ready for sustaine
 
 ## Next milestone
 
-Improve the tabular baseline's action proposal mechanism so it can safely act on locally observed object IDs, then run a documented train/validation/test comparison across procedural seeds. This is the smallest next step that would turn the existing infrastructure-validation baseline into a meaningful learning experiment.
+Expose the tested tabular partition evaluator as a single report-producing CLI workflow, then run and document a train/validation/test comparison across procedural seeds. This will turn the existing infrastructure-validation baseline into a more meaningful learning experiment without overstating its capability.
