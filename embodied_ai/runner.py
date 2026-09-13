@@ -6,7 +6,7 @@ from typing import Any
 from dataclasses import dataclass, field
 import httpx
 from .context import AgentContext
-from .schemas import AgentDecision, ActionRequest
+from .schemas import AgentDecision, ActionRequest, Observation
 
 @dataclass
 class RemoteRunResult:
@@ -20,6 +20,14 @@ class RemoteRunResult:
 
 class RustRunClient:
     def __init__(self, base_url: str="http://127.0.0.1:8080", timeout: float=15): self.client=httpx.Client(base_url=base_url, timeout=timeout)
+    @staticmethod
+    def _validate_observation(payload: dict) -> dict:
+        return Observation.model_validate(payload).model_dump(mode="json")
+    def _with_validated_observation(self, response: dict) -> dict:
+        if "observation" in response:
+            response = dict(response)
+            response["observation"] = self._validate_observation(response["observation"])
+        return response
     def create(self, seed: int, max_steps: int | None = None, observation_mode: str = "normal", scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None) -> dict:
         if scenario_id is not None and generated_world is not None:
             raise ValueError("choose either scenario_id or generated_world")
@@ -32,17 +40,17 @@ class RustRunClient:
             request["reward_config"] = reward_config
         if max_steps is not None: request["max_steps"] = max_steps
         request["observation_mode"] = observation_mode
-        return self.client.post("/api/runs", json=request).raise_for_status().json()
+        return self._with_validated_observation(self.client.post("/api/runs", json=request).raise_for_status().json())
     def scenarios(self) -> list[dict]: return self.client.get("/api/scenarios").raise_for_status().json()
     def world_partition(self, seed: int) -> str: return self.client.get(f"/api/worlds/partition/{seed}").raise_for_status().json()
     def snapshot(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}").raise_for_status().json()
     def status(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/status").raise_for_status().json()
-    def observation(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/observation").raise_for_status().json()
+    def observation(self, run_id: str) -> dict: return self._validate_observation(self.client.get(f"/api/runs/{run_id}/observation").raise_for_status().json())
     def replay(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/replay").raise_for_status().json()
-    def restore(self, replay_id: str) -> dict: return self.client.post(f"/api/replays/{replay_id}/resume").raise_for_status().json()
+    def restore(self, replay_id: str) -> dict: return self._with_validated_observation(self.client.post(f"/api/replays/{replay_id}/resume").raise_for_status().json())
     def record_decision(self, run_id: str, action: ActionRequest, decision_summary: str, provider: str, model: str | None, latency_ms: int, token_usage: dict | None, agent_metadata: dict | None = None) -> dict:
         return self.client.post(f"/api/runs/{run_id}/decision", json={"action": action.model_dump(exclude_none=True), "decision_summary": decision_summary, "provider": provider, "model": model, "latency_ms": max(0, round(latency_ms)), "token_usage": token_usage, "agent_metadata": agent_metadata}).raise_for_status().json()
-    def step(self, run_id: str, action: ActionRequest) -> dict: return self.client.post(f"/api/runs/{run_id}/step",json=action.model_dump(exclude_none=True)).raise_for_status().json()
+    def step(self, run_id: str, action: ActionRequest) -> dict: return self._with_validated_observation(self.client.post(f"/api/runs/{run_id}/step",json=action.model_dump(exclude_none=True)).raise_for_status().json())
     def provider_error(self, run_id: str) -> dict: return self.client.post(f"/api/runs/{run_id}/provider-error").raise_for_status().json()
     def stop(self, run_id: str, reason: str) -> dict: return self.client.post(f"/api/runs/{run_id}/stop", json={"reason": reason}).raise_for_status().json()
     def close(self) -> None: self.client.close()

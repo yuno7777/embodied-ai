@@ -1,4 +1,4 @@
-from embodied_ai.schemas import ActionRequest
+from embodied_ai.schemas import ActionRequest, Observation
 from embodied_ai.schemas import AgentDecision
 from embodied_ai.runner import RustRunClient
 from embodied_ai import runner
@@ -55,6 +55,31 @@ def test_action_schema_rejects_invalid_field_combinations():
         except ValidationError: pass
         else: raise AssertionError(f"invalid action shape was accepted: {payload}")
     assert ActionRequest(type="move", direction="north", target_id=None, item_id=None).direction == "north"
+
+
+def test_observation_contract_rejects_privileged_or_malformed_rust_payloads():
+    payload = {
+        "protocol_version": 1, "run_id": "run-1", "step": 0, "observation_mode": "normal",
+        "agent": {"facing": "east", "health": 100, "energy": 100, "hydration": 100, "inventory": [], "max_inventory": 4, "max_inventory_weight": 8, "status_effects": []},
+        "goal": "Reach the exit.", "visible_cells": [{"relative_position": {"x": 0, "y": 0}, "terrain": "floor", "entities": []}],
+        "recent_events": [], "perception_note": None, "allowed_action_types": ["wait"],
+    }
+    assert Observation.model_validate(payload).model_dump(mode="json")["run_id"] == "run-1"
+    payload["research_snapshot"] = {"agent_position": {"x": 9, "y": 9}}
+    with pytest.raises(ValidationError, match="research_snapshot"):
+        Observation.model_validate(payload)
+
+
+def test_rust_client_validates_observation_responses_before_policy_use():
+    class Response:
+        def raise_for_status(self): return self
+        def json(self): return {"protocol_version": 1, "run_id": "r", "step": 0, "observation_mode": "normal", "agent": {}, "goal": "", "visible_cells": [], "recent_events": [], "perception_note": None, "allowed_action_types": []}
+    class Client:
+        def get(self, _path): return Response()
+    client = object.__new__(RustRunClient)
+    client.client = Client()
+    with pytest.raises(ValidationError):
+        client.observation("r")
 
 
 def test_authoritative_run_creation_sends_an_optional_max_step_override():

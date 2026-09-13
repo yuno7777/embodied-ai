@@ -8,9 +8,58 @@ PROTOCOL_VERSION = 1
 DATASET_SCHEMA_VERSION = 1
 
 class Position(BaseModel): x: int; y: int
+
+
+ActionType = Literal["move", "inspect", "pickup", "drop", "use_item", "open", "close", "talk", "give", "wait", "rest"]
+
+
+class VisibleEntity(BaseModel):
+    """One public entity descriptor emitted by the Rust sensor boundary."""
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(min_length=1, max_length=128)
+    type: str = Field(min_length=1, max_length=128)
+    state: str | None = None
+    name: str | None = None
+
+
+class VisibleCell(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    relative_position: Position
+    terrain: Literal["floor", "wall"]
+    entities: list[VisibleEntity]
+
+
+class AgentObservation(BaseModel):
+    """Public body state, deliberately excluding identity and absolute position."""
+    model_config = ConfigDict(extra="forbid")
+    facing: Literal["north", "south", "east", "west"]
+    health: int = Field(ge=0, le=100)
+    energy: int = Field(ge=0, le=100)
+    hydration: int = Field(ge=0, le=100)
+    inventory: list[str]
+    max_inventory: int = Field(ge=0)
+    max_inventory_weight: int = Field(ge=0)
+    status_effects: list[str]
+
+
+class Observation(BaseModel):
+    """Canonical v1 policy observation returned by the authoritative Rust API."""
+    model_config = ConfigDict(extra="forbid")
+    protocol_version: Literal[PROTOCOL_VERSION]
+    run_id: str = Field(min_length=1)
+    step: int = Field(ge=0)
+    observation_mode: Literal["minimal", "normal", "rich", "oracle", "noisy"]
+    agent: AgentObservation
+    goal: str
+    visible_cells: list[VisibleCell]
+    recent_events: list[str]
+    perception_note: str | None = None
+    allowed_action_types: list[ActionType]
+
+
 class ActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    type: Literal["move", "inspect", "pickup", "drop", "use_item", "open", "close", "talk", "give", "wait", "rest"]
+    type: ActionType
     direction: Literal["north", "south", "east", "west"] | None = None
     target_id: str | None = Field(default=None, max_length=128)
     item_id: str | None = Field(default=None, max_length=128)
