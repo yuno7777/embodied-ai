@@ -67,6 +67,17 @@ def wilson_interval(successes: int, total: int, z: float = 1.96) -> tuple[float,
     return (center - margin, center + margin)
 
 
+def built_in_world_partition(seed: int) -> str | None:
+    """Return Rust's optional default-distribution assertion for a seed."""
+    if 0 <= seed <= 7_999:
+        return "train"
+    if 8_000 <= seed <= 8_999:
+        return "validation"
+    if 9_000 <= seed <= 9_999:
+        return "test"
+    return None
+
+
 def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize train/validation/test episodes and their held-out gap."""
     expected = {"train", "validation", "test"}
@@ -143,6 +154,8 @@ def evaluate_generalization_remote(
         generated_world: dict[str, Any] = {"seed": seed}
         if generator_config is not None:
             generated_world["config"] = dict(generator_config)
+        if built_in_world_partition(seed) == partition:
+            generated_world["partition"] = partition
         result = run_remote(provider_for(provider_name, seed), seed, base_url, generated_world=generated_world)
         final = result.records[-1] if result.records else {}
         metrics = final.get("metrics", {}) if isinstance(final.get("metrics"), dict) else {}

@@ -88,7 +88,10 @@ def test_generalization_summary_reports_held_out_gap_and_uncertainty():
 
 def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):
     def fake_run(provider, seed, _base_url, **kwargs):
-        assert kwargs["generated_world"] == {"seed": seed, "config": {"min_width": 9, "max_width": 9}}
+        expected = {"seed": seed, "config": {"min_width": 9, "max_width": 9}}
+        if seed == 1:
+            expected["partition"] = "train"
+        assert kwargs["generated_world"] == expected
         record = {"reward": 4, "metrics": {"invalid_actions": 0, "exploration_coverage": .5, "resource_efficiency": .8}, "control_elapsed_ms": 10}
         return RemoteRunResult(f"run-{seed}", "escaped" if seed == 1 else "timeout", 2, [record])
     monkeypatch.setattr(benchmark, "run_remote", fake_run)
@@ -106,6 +109,25 @@ def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monk
     manifest = tmp_path / report["experiment_manifest"]
     assert manifest.exists()
     assert json.loads(manifest.read_text())["world_distribution"] == report["world_distribution"]
+
+
+def test_generalization_asserts_matching_built_in_partition_membership(monkeypatch, tmp_path):
+    requested = []
+    def fake_run(_provider, seed, _base_url, **kwargs):
+        requested.append(kwargs["generated_world"])
+        return RemoteRunResult(f"run-{seed}", "timeout", 1, [{"metrics": {}}])
+    monkeypatch.setattr(benchmark, "run_remote", fake_run)
+    plan = benchmark.GeneralizationPlan(
+        benchmark.SeedPartition("train", (0,)),
+        benchmark.SeedPartition("validation", (8000,)),
+        benchmark.SeedPartition("test", (9000,)),
+    )
+    benchmark.evaluate_generalization_remote(plan, tmp_path, "http://sim")
+    assert requested == [
+        {"seed": 0, "partition": "train"},
+        {"seed": 8000, "partition": "validation"},
+        {"seed": 9000, "partition": "test"},
+    ]
 
 
 def test_parallel_scaling_records_each_requested_worker_level(monkeypatch, tmp_path):
