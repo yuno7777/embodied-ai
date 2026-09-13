@@ -32,6 +32,8 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
         next_record = ordered[index + 1] if index + 1 < len(ordered) and ordered[index + 1].get("run_id") == record.get("run_id") else None
         transition = {
             "dataset_schema_version": record.get("dataset_schema_version", 1),
+            "experiment_id": record.get("experiment_id"),
+            "world_manifest": record.get("world_manifest"),
             "run_id": record.get("run_id"),
             "step": record.get("step"),
             "observation_t": record.get("observation"),
