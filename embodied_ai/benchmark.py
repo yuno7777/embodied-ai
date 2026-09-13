@@ -201,7 +201,7 @@ def benchmark_slices(trajectories: list[dict]) -> tuple[list[dict], list[dict]]:
 
 def benchmark_remote(runs: int, seed_start: int, output: Path, base_url: str, provider_name: str="scripted", concurrency: int=1) -> dict:
     if runs < 1: raise ValueError("runs must be positive")
-    if concurrency < 1 or concurrency > 32: raise ValueError("concurrency must be between 1 and 32")
+    if concurrency < 1 or concurrency > 64: raise ValueError("concurrency must be between 1 and 64")
     output.mkdir(parents=True, exist_ok=True)
     def execute(index: int):
         provider=provider_for(provider_name, seed_start+index); result=run_remote(provider, seed_start+index, base_url)
@@ -237,6 +237,31 @@ def benchmark_remote(runs: int, seed_start: int, output: Path, base_url: str, pr
     total_simulation_us=sum(simulation_times)
     summary={"scenario_id":"survival_room","provider":provider_name,"runs":runs,"seed_start":seed_start,"concurrency":concurrency,"success_rate":sum(r["outcome"]=="escaped" for r in rows)/runs,"mean_score":sum(r["score"] for r in rows)/runs,"mean_steps":sum(r["steps"] for r in rows)/runs,"mean_step_latency_ms":sum(step_latencies)/len(step_latencies) if step_latencies else None,"mean_control_elapsed_ms":sum(control_times)/len(control_times) if control_times else None,"simulation_steps_per_second":sum(r["steps"] for r in rows)/(total_simulation_us/1_000_000) if total_simulation_us>0 else None,"engine_version":"rust-v1","base_url":base_url,"seed_results":[{"seed":r["seed"],"outcome":r["outcome"],"score":r["score"],"steps":r["steps"],"simulation_latency_us":r["simulation_latency_us"]} for r in rows]}
     (output/"benchmark_summary.json").write_text(json.dumps(summary,indent=2)); return summary
+
+
+def benchmark_parallel_scaling(
+    runs: int, seed_start: int, output: Path, base_url: str, provider_name: str = "scripted",
+    worker_counts: tuple[int, ...] = (1, 8, 32, 64),
+) -> dict[str, Any]:
+    """Measure bounded local parallel episode execution at explicit worker counts."""
+    if not worker_counts or any(count < 1 or count > 64 for count in worker_counts):
+        raise ValueError("worker counts must be between 1 and 64")
+    if len(set(worker_counts)) != len(worker_counts):
+        raise ValueError("worker counts must be unique")
+    output.mkdir(parents=True, exist_ok=True)
+    reports = []
+    for count in worker_counts:
+        report = benchmark_remote(runs, seed_start, output / f"workers-{count}", base_url, provider_name, count)
+        reports.append({
+            "workers": count,
+            "runs": report["runs"],
+            "simulation_steps_per_second": report["simulation_steps_per_second"],
+            "mean_control_elapsed_ms": report["mean_control_elapsed_ms"],
+            "mean_step_latency_ms": report["mean_step_latency_ms"],
+        })
+    result = {"report_version": 1, "provider": provider_name, "runs_per_level": runs, "seed_start": seed_start, "levels": reports}
+    (output / "parallel_scaling.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return result
 
 def compare_benchmarks(left: dict, right: dict) -> dict:
     if left.get("scenario_id") != right.get("scenario_id"):

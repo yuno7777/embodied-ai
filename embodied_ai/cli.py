@@ -2,7 +2,7 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 from .analysis import check_reproducibility, filter_trajectory, load_jsonl, summarize_trajectory, verify_replay
-from .benchmark import GeneralizationPlan, SeedPartition, benchmark_remote, compare_benchmarks, evaluate_generalization_remote
+from .benchmark import GeneralizationPlan, SeedPartition, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, evaluate_generalization_remote
 from .datasets import export_csv, export_jsonl, export_parquet
 from .experiments import ExperimentManifest
 from .environment import EmbodiedEnv, EmbodiedEnvConfig
@@ -31,6 +31,7 @@ def main():
     a=sub.add_parser('run'); a.add_argument('--scenario',default='survival_room'); a.add_argument('--seed',type=int,default=42); a.add_argument('--provider',choices=provider_choices,default='scripted'); a.add_argument('--model'); a.add_argument('--max-steps',type=int); a.add_argument('--max-wall-seconds',type=float); a.add_argument('--max-total-tokens',type=int); resume=a.add_mutually_exclusive_group(); resume.add_argument('--resume-run-id'); resume.add_argument('--restore-replay-id'); a.add_argument('--observation-mode',choices=['minimal','normal','rich'],default='normal'); a.add_argument('--output',type=Path); a.add_argument('--memory-mode',choices=['none','recent'],default='recent'); a.add_argument('--server-url')
     a.add_argument('--memory-window',type=int,default=5,choices=range(1,101),metavar='1..100')
     b=sub.add_parser('benchmark'); b.add_argument('--scenario',default='survival_room'); b.add_argument('--provider',choices=provider_choices,default='scripted'); b.add_argument('--runs',type=int,default=5); b.add_argument('--seed-start',type=int,default=1000); b.add_argument('--concurrency',type=int,default=1); b.add_argument('--output',type=Path,default=ROOT/'data'/'exports'); b.add_argument('--server-url')
+    scale=sub.add_parser('benchmark-scale'); scale.add_argument('--provider',choices=provider_choices,default='scripted'); scale.add_argument('--runs',type=int,default=5); scale.add_argument('--seed-start',type=int,default=1000); scale.add_argument('--workers',default='1,8,32,64'); scale.add_argument('--output',type=Path,default=ROOT/'data'/'exports'/'parallel-scaling'); scale.add_argument('--server-url')
     generalize=sub.add_parser('generalize'); generalize.add_argument('--provider',choices=provider_choices,default='scripted'); generalize.add_argument('--train-start',type=int,default=0); generalize.add_argument('--train-count',type=int,default=5); generalize.add_argument('--validation-start',type=int,default=100); generalize.add_argument('--validation-count',type=int,default=2); generalize.add_argument('--test-start',type=int,default=200); generalize.add_argument('--test-count',type=int,default=2); generalize.add_argument('--concurrency',type=int,default=1); generalize.add_argument('--generator-config',type=Path); generalize.add_argument('--output',type=Path,default=ROOT/'data'/'exports'/'generalization'); generalize.add_argument('--server-url')
     train_q=sub.add_parser('train-tabular'); train_q.add_argument('--seed-start',type=int,default=0); train_q.add_argument('--episodes',type=int,default=20); train_q.add_argument('--max-steps',type=int,default=128); train_q.add_argument('--learning-rate',type=float,default=.2); train_q.add_argument('--discount',type=float,default=.95); train_q.add_argument('--epsilon',type=float,default=.2); train_q.add_argument('--checkpoint',type=Path,default=ROOT/'data'/'checkpoints'/'tabular_q.json'); train_q.add_argument('--server-url')
     eval_q=sub.add_parser('evaluate-tabular'); eval_q.add_argument('--checkpoint',type=Path,required=True); eval_q.add_argument('--seed-start',type=int,default=9000); eval_q.add_argument('--episodes',type=int,default=10); eval_q.add_argument('--max-steps',type=int,default=128); eval_q.add_argument('--server-url')
@@ -54,6 +55,14 @@ def main():
     elif args.cmd=='benchmark':
         if not args.server_url: p.error('Benchmarks require --server-url for the authoritative Rust simulation. Start .\\scripts\\dev.ps1 first.')
         print(json.dumps(benchmark_remote(args.runs,args.seed_start,args.output,args.server_url,args.provider,args.concurrency),indent=2))
+    elif args.cmd=='benchmark-scale':
+        if not args.server_url: p.error('Parallel benchmarks require --server-url for the authoritative Rust simulation. Start .\\scripts\\dev.ps1 first.')
+        try:
+            workers=tuple(int(value) for value in args.workers.split(',') if value.strip())
+            report=benchmark_parallel_scaling(args.runs,args.seed_start,args.output,args.server_url,args.provider,workers)
+        except ValueError as error:
+            p.error(str(error))
+        print(json.dumps(report,indent=2))
     elif args.cmd=='generalize':
         if not args.server_url: p.error('Generalization evaluations require --server-url for the authoritative Rust simulation. Start .\\scripts\\dev.ps1 first.')
         try:

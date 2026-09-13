@@ -105,3 +105,15 @@ def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monk
     manifest = tmp_path / report["experiment_manifest"]
     assert manifest.exists()
     assert json.loads(manifest.read_text())["world_distribution"] == report["world_distribution"]
+
+
+def test_parallel_scaling_records_each_requested_worker_level(monkeypatch, tmp_path):
+    calls = []
+    def fake_benchmark(runs, seed_start, output, base_url, provider_name, concurrency):
+        calls.append((runs, seed_start, output.name, base_url, provider_name, concurrency))
+        return {"runs": runs, "simulation_steps_per_second": concurrency * 10, "mean_control_elapsed_ms": 4, "mean_step_latency_ms": 2}
+    monkeypatch.setattr(benchmark, "benchmark_remote", fake_benchmark)
+    report = benchmark.benchmark_parallel_scaling(3, 20, tmp_path, "http://sim", worker_counts=(1, 8, 64))
+    assert [level["workers"] for level in report["levels"]] == [1, 8, 64]
+    assert [call[-1] for call in calls] == [1, 8, 64]
+    assert (tmp_path / "parallel_scaling.json").exists()
