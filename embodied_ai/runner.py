@@ -46,10 +46,13 @@ class RustRunClient:
     def stop(self, run_id: str, reason: str) -> dict: return self.client.post(f"/api/runs/{run_id}/stop", json={"reason": reason}).raise_for_status().json()
     def close(self) -> None: self.client.close()
 
-def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None, experiment_id: str | None = None, include_research_snapshots: bool = False) -> RemoteRunResult:
+def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None, experiment_id: str | None = None, include_research_snapshots: bool = False, policy_state_mode: str = "reset") -> RemoteRunResult:
     context=AgentContext(memory_mode=memory_mode, memory_window=memory_window); client=RustRunClient(base_url)
+    run_id: str | None = None
     try:
-        if hasattr(provider, "reset"):
+        if policy_state_mode not in {"reset", "preserve"}:
+            raise ValueError("policy_state_mode must be reset or preserve")
+        if policy_state_mode == "reset" and hasattr(provider, "reset"):
             provider.reset(seed)
         if max_wall_seconds is not None and max_wall_seconds <= 0: raise ValueError("max_wall_seconds must be positive")
         if max_total_tokens is not None and max_total_tokens <= 0: raise ValueError("max_total_tokens must be positive")
@@ -109,7 +112,7 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 if scenario is None:
                     scenario = client.scenarios()[0]
                 next_research_snapshot = client.snapshot(run_id) if include_research_snapshots else None
-                records.append({"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"observation_mode":observation_mode,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"agent_metadata":agent_metadata,"events":result["events"],"reward":result["reward"],"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
+                records.append({"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"observation_mode":observation_mode,"policy_state_mode":policy_state_mode,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"agent_metadata":agent_metadata,"events":result["events"],"reward":result["reward"],"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
                 if include_research_snapshots:
                     records[-1]["research_snapshot"] = research_snapshot
                     records[-1]["next_research_snapshot"] = next_research_snapshot
@@ -117,6 +120,8 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 context.record(observation,action.model_dump(exclude_none=True),result["events"]); observation=result["observation"]; research_snapshot = next_research_snapshot
                 if result["done"]: return RemoteRunResult(run_id,result["terminal_reason"],steps,records,world_manifest=world_manifest)
         except Exception:
+            if run_id is None:
+                raise
             client.provider_error(run_id)
             return RemoteRunResult(run_id,"provider_error",steps,records,world_manifest=world_manifest)
     finally: client.close()

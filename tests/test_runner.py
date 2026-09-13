@@ -171,6 +171,31 @@ def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch)
     assert result.world_manifest == {"scenario": {"id": "procedural_17", "version": 1}}
 
 
+def test_runner_makes_policy_state_lifecycle_explicit(monkeypatch):
+    class Client:
+        def __init__(self, _base_url): pass
+        def create(self, *_args): return {"run_id": "r", "observation": {"allowed_action_types": ["wait"]}}
+        def scenarios(self): return [{"id": "survival_room", "version": 3}]
+        def status(self, _run_id): return {"done": False, "paused": False, "step": 0}
+        def record_decision(self, *_args): return {}
+        def step(self, _run_id, _action): return {"step_number": 1, "observation": {"allowed_action_types": ["wait"]}, "events": [], "reward": 0, "done": True, "terminal_reason": "timeout", "metrics": {}}
+        def close(self): pass
+    class Provider:
+        name = "stateful"
+        def __init__(self): self.resets = []
+        def reset(self, seed): self.resets.append(seed)
+        def choose_action(self, _observation): return ActionRequest(type="wait")
+    monkeypatch.setattr(runner, "RustRunClient", Client)
+    provider = Provider()
+    reset_result = runner.run_remote(provider, 7)
+    preserved_result = runner.run_remote(provider, 8, policy_state_mode="preserve")
+    assert provider.resets == [7]
+    assert reset_result.records[0]["policy_state_mode"] == "reset"
+    assert preserved_result.records[0]["policy_state_mode"] == "preserve"
+    with pytest.raises(ValueError, match="policy_state_mode"):
+        runner.run_remote(provider, 9, policy_state_mode="implicit")
+
+
 def test_research_snapshots_are_opt_in_and_never_added_to_provider_input(monkeypatch):
     calls = []
     class Client:

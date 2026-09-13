@@ -57,6 +57,18 @@ def test_run_cli_requires_an_explicit_flag_for_privileged_research_snapshots(mon
     assert captured["include_research_snapshots"] is True
 
 
+def test_run_cli_records_an_explicit_policy_state_mode(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(cli, "run_remote", lambda *_args, **kwargs: (captured.update(kwargs) or RemoteRunResult("run-1", "timeout", 0, [])))
+    monkeypatch.setattr(cli, "export_jsonl", lambda _records, path: path)
+    monkeypatch.setattr(cli, "export_parquet", lambda _records, _path: None)
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "run", "--policy-state-mode", "preserve", "--server-url", "http://sim", "--output", str(tmp_path)])
+    cli.main()
+    manifest = __import__("json").loads(next(tmp_path.glob("*.experiment.json")).read_text())
+    assert captured["policy_state_mode"] == "preserve"
+    assert manifest["agent_config"]["policy_state_mode"] == "preserve"
+
+
 def test_audit_dataset_cli_reports_local_transition_coverage(monkeypatch, tmp_path, capsys):
     trajectory = tmp_path / "run.jsonl"
     trajectory.write_text('{"run_id":"r","step":1,"chosen_action":{"type":"wait"},"next_observation":{}}\n', encoding="utf-8")

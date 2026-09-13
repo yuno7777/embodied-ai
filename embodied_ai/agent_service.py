@@ -33,6 +33,7 @@ class AgentRunRequest(BaseModel):
     model: str | None = Field(default=None, max_length=128)
     memory_mode: Literal["none", "recent"] = "recent"
     memory_window: int = Field(default=5, ge=1, le=100, strict=True)
+    policy_state_mode: Literal["reset", "preserve"] = "reset"
     observation_mode: Literal["minimal", "normal", "rich", "oracle", "noisy"] = "normal"
     max_steps: int | None = Field(default=None, ge=1, le=10_000)
     max_wall_seconds: float | None = Field(default=None, gt=0, le=86_400)
@@ -69,7 +70,7 @@ class AgentRunManager:
                     max_steps=request.max_steps,
                     max_wall_seconds=request.max_wall_seconds,
                     max_total_tokens=request.max_total_tokens,
-                    agent_config={"launch": "agent_service", "provider": request.provider},
+                    agent_config={"launch": "agent_service", "provider": request.provider, "policy_state_mode": request.policy_state_mode},
                 )
                 manifest_path = manifest.persist(self.output_directory)
                 result = run_remote(
@@ -84,6 +85,7 @@ class AgentRunManager:
                     request.max_total_tokens,
                     memory_window=request.memory_window,
                     experiment_id=manifest.experiment_id,
+                    policy_state_mode=request.policy_state_mode,
                 )
                 self._finish(result, manifest_path)
             except Exception as error:  # surfaced to the local observer; no secret-bearing request data is retained

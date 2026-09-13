@@ -24,10 +24,11 @@ def test_agent_service_starts_a_provider_only_after_the_rust_run_exists(monkeypa
 
     monkeypatch.setattr("embodied_ai.agent_service.run_remote", fake_run_remote)
     manager = AgentRunManager("http://127.0.0.1:8080", tmp_path)
-    started = manager.start(AgentRunRequest(provider="scripted", seed=7))
+    started = manager.start(AgentRunRequest(provider="scripted", seed=7, policy_state_mode="preserve"))
     assert started["run_id"] == "authoritative-run"
     assert started["status"] in {"running", "completed"}
     assert isinstance(captured["experiment_id"], str)
+    assert captured["policy_state_mode"] == "preserve"
     assert len(list(tmp_path.glob("*.experiment.json"))) == 1
 
 
@@ -72,3 +73,10 @@ def test_agent_request_validates_lightweight_runtime_budgets():
 def test_agent_request_accepts_explicit_sensor_ablation_modes():
     assert AgentRunRequest(observation_mode="noisy").observation_mode == "noisy"
     assert AgentRunRequest(observation_mode="oracle").observation_mode == "oracle"
+
+
+def test_agent_request_makes_policy_state_lifecycle_explicit():
+    assert AgentRunRequest().policy_state_mode == "reset"
+    assert AgentRunRequest(policy_state_mode="preserve").policy_state_mode == "preserve"
+    with pytest.raises(Exception):
+        AgentRunRequest(policy_state_mode="implicit")
