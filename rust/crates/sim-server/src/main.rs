@@ -1051,16 +1051,24 @@ async fn record_decision(
         ));
     }
     if let Some(metadata) = &input.agent_metadata {
-        let finite = [metadata.confidence, metadata.value_estimate, metadata.policy_entropy]
-            .into_iter()
-            .flatten()
-            .all(f64::is_finite);
-        let confidence_valid = metadata.confidence.is_none_or(|value| (0.0..=1.0).contains(&value));
+        let finite = [
+            metadata.confidence,
+            metadata.value_estimate,
+            metadata.policy_entropy,
+        ]
+        .into_iter()
+        .flatten()
+        .all(f64::is_finite);
+        let confidence_valid = metadata
+            .confidence
+            .is_none_or(|value| (0.0..=1.0).contains(&value));
         let entropy_valid = metadata.policy_entropy.is_none_or(|value| value >= 0.0);
         let planner_valid = metadata.planner.as_ref().is_none_or(|planner| {
             !planner.name.is_empty()
                 && planner.name.chars().count() <= 128
-                && planner.planning_time_ms.is_none_or(|value| value.is_finite() && value >= 0.0)
+                && planner
+                    .planning_time_ms
+                    .is_none_or(|value| value.is_finite() && value >= 0.0)
         });
         if !finite || !confidence_valid || !entropy_valid || !planner_valid {
             return Err((
@@ -1367,14 +1375,16 @@ mod tests {
 
     #[test]
     fn committed_decision_schema_matches_rust_metadata_boundary() {
-        let schema: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../schemas/agent-decision.v1.json"
-        ))
-        .unwrap();
+        let schema: serde_json::Value =
+            serde_json::from_str(include_str!("../../../../schemas/agent-decision.v1.json"))
+                .unwrap();
         let metadata = &schema["properties"]["agent_metadata"]["anyOf"][0];
         assert_eq!(schema["required"], serde_json::json!(["action"]));
         assert_eq!(metadata["properties"]["confidence"]["maximum"], 1);
-        assert_eq!(metadata["properties"]["planner"]["properties"]["name"]["maxLength"], 128);
+        assert_eq!(
+            metadata["properties"]["planner"]["properties"]["name"]["maxLength"],
+            128
+        );
         let accepted = serde_json::json!({
             "action": {"type": "wait"}, "decision_summary": "bounded",
             "provider": "test", "model": null, "latency_ms": 1, "token_usage": null,
@@ -2145,7 +2155,10 @@ mod tests {
             replay_json["decisions"][0]["token_usage"]["total_tokens"],
             19
         );
-        assert_eq!(replay_json["decisions"][0]["agent_metadata"]["planner"]["name"], "astar");
+        assert_eq!(
+            replay_json["decisions"][0]["agent_metadata"]["planner"]["name"],
+            "astar"
+        );
     }
 
     #[tokio::test]
