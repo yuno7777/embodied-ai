@@ -133,6 +133,9 @@ def audit_experiment_manifest(
     if policy_state_mode is not None:
         if any(record.get("policy_state_mode") != policy_state_mode for record in records):
             raise ValueError("trajectory policy_state_mode does not match its manifest")
+    if manifest.reward_config is not None:
+        if any(record.get("reward_config") != manifest.reward_config for record in records):
+            raise ValueError("trajectory reward_config does not match its manifest")
     run_ids = {record.get("run_id") for record in records}
     if len(run_ids) > 1:
         raise ValueError("one experiment trajectory audit requires exactly one run_id")
@@ -141,5 +144,6 @@ def audit_experiment_manifest(
         "trajectory_run_id": next(iter(run_ids), None),
         "world_manifest_checked": True,
         "policy_state_mode_checked": policy_state_mode is not None,
+        "reward_config_checked": manifest.reward_config is not None,
     })
     return receipt

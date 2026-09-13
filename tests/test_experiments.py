@@ -78,3 +78,18 @@ def test_experiment_audit_rejects_tampering_and_mismatched_trajectory_provenance
     path = manifest.persist(tmp_path)
     with pytest.raises(ValueError, match="experiment_id"):
         audit_experiment_manifest(path, [{"experiment_id": "other", "observation_mode": "normal", "world_manifest": None}])
+
+
+def test_experiment_audit_binds_a_pinned_reward_profile_to_trajectory_rows(tmp_path):
+    rewards = {"baseline_per_step": -1, "discovery_bonus": 5, "invalid_action_penalty": -2, "terminal_success": 100, "terminal_failure": -100}
+    manifest = ExperimentManifest(
+        experiment_id="experiment", scenario_id="survival_room", seed=9, provider="scripted",
+        observation_mode="normal", memory_mode="none", memory_window=1, reward_config=rewards,
+    )
+    path = manifest.persist(tmp_path)
+    record = {"experiment_id": "experiment", "run_id": "run-1", "observation_mode": "normal", "world_manifest": None, "reward_config": rewards}
+    receipt = audit_experiment_manifest(path, [record])
+    assert receipt["reward_config_checked"] is True
+    record["reward_config"] = {**rewards, "terminal_success": 1}
+    with pytest.raises(ValueError, match="reward_config"):
+        audit_experiment_manifest(path, [record])
