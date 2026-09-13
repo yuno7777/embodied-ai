@@ -80,6 +80,14 @@ def test_headless_environment_accepts_concise_research_loop_keywords(monkeypatch
     assert info["distribution"] == "test"
     with pytest.raises(ValueError, match="either config"):
         EmbodiedEnv(EmbodiedEnvConfig(), distribution="train")
+    with pytest.raises(ValueError, match="unsupported observation_mode"):
+        EmbodiedEnvConfig(observation_mode="thermal")
+
+
+def test_headless_environment_rejects_an_unknown_reset_sensor_mode(monkeypatch):
+    monkeypatch.setattr(environment, "RustRunClient", FakeClient)
+    with pytest.raises(ValueError, match="unsupported observation_mode"):
+        EmbodiedEnv().reset(options={"observation_mode": "thermal"})
 
 
 def test_headless_environment_rejects_partitioned_catalog_scenarios(monkeypatch):

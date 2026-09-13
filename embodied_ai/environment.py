@@ -7,6 +7,9 @@ from typing import Any, Literal
 from .runner import RustRunClient
 from .schemas import ActionRequest
 
+ObservationMode = Literal["minimal", "normal", "rich", "oracle", "noisy"]
+_OBSERVATION_MODES = frozenset(("minimal", "normal", "rich", "oracle", "noisy"))
+
 
 @dataclass(frozen=True)
 class EmbodiedEnvConfig:
@@ -18,12 +21,14 @@ class EmbodiedEnvConfig:
     distribution: Literal["train", "validation", "test"] | None = None
     world_partition: Literal["train", "validation", "test"] | None = None
     reward_config: dict[str, int] | None = None
-    observation_mode: str = "normal"
+    observation_mode: ObservationMode = "normal"
     max_steps: int | None = None
 
     def __post_init__(self) -> None:
         if self.distribution is not None and self.world_partition is not None and self.distribution != self.world_partition:
             raise ValueError("distribution conflicts with world_partition")
+        if self.observation_mode not in _OBSERVATION_MODES:
+            raise ValueError("unsupported observation_mode")
 
 
 class EmbodiedEnv:
@@ -39,7 +44,7 @@ class EmbodiedEnv:
         config: EmbodiedEnvConfig | None = None,
         *,
         distribution: Literal["train", "validation", "test"] | None = None,
-        observation_mode: str | None = None,
+        observation_mode: ObservationMode | None = None,
         server_url: str | None = None,
     ):
         """Create an explicit config or use the concise research-loop keywords."""
@@ -68,6 +73,8 @@ class EmbodiedEnv:
         world_partition = distribution or legacy_partition
         reward_config = options.get("reward_config", self.config.reward_config)
         observation_mode = options.get("observation_mode", self.config.observation_mode)
+        if observation_mode not in _OBSERVATION_MODES:
+            raise ValueError("unsupported observation_mode")
         max_steps = options.get("max_steps", self.config.max_steps)
         if world_partition is not None:
             if scenario_id is not None:
