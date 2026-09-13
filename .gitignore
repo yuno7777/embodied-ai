@@ -8,6 +8,7 @@ frontend/observer/.next/
 frontend/observer/tsconfig.tsbuildinfo
 data/local-processes/
 data/browser-smoke/
+data/smoke*/
 data/runs/*
 !data/runs/.gitkeep
 data/checkpoints/
