@@ -104,6 +104,85 @@ class WorldManifest(BaseModel):
     scenario: dict[str, object]
 
 
+class RewardBreakdown(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    baseline: int
+    progress: int
+    invalid_action_penalty: int
+    hazard_penalty: int
+    terminal: int
+
+
+class Event(BaseModel):
+    """Authoritative event emitted by a completed Rust transition."""
+    model_config = ConfigDict(extra="forbid")
+    event_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    step: int = Field(ge=0)
+    simulation_time: int = Field(ge=0)
+    timestamp: str = Field(min_length=1)
+    type: str = Field(min_length=1)
+    message: str
+
+
+class Metrics(BaseModel):
+    """Evaluator-owned v1 metrics returned with each authoritative step."""
+    model_config = ConfigDict(extra="forbid")
+    escaped: bool
+    alive: bool
+    steps_taken: int = Field(ge=0)
+    simulated_time: int = Field(ge=0)
+    final_health: int = Field(ge=0, le=100)
+    final_energy: int = Field(ge=0, le=100)
+    final_hydration: int = Field(ge=0, le=100)
+    invalid_actions: int = Field(ge=0)
+    repeated_invalid_actions: int = Field(ge=0)
+    unique_cells_visited: int = Field(ge=0)
+    useful_items_acquired: int = Field(ge=0)
+    carried_weight: int = Field(ge=0)
+    inventory_weight_capacity: int = Field(ge=0)
+    exploration_coverage: float = Field(ge=0, le=1)
+    action_diversity: int = Field(ge=0)
+    repeated_actions: int = Field(ge=0)
+    action_repetition_rate: float = Field(ge=0, le=1)
+    resource_efficiency: float = Field(ge=0, le=1)
+    hazard_damage_taken: int = Field(ge=0)
+    npc_interactions: int = Field(ge=0)
+    unnecessary_actions: int = Field(ge=0)
+    recovery_after_failure: bool
+    discovered_doors: int = Field(ge=0)
+    discovered_items: int = Field(ge=0)
+    discovered_hazards: int = Field(ge=0)
+    discovered_npcs: int = Field(ge=0)
+    first_discovery_steps: dict[str, int]
+    milestones: dict[str, int]
+    score_task_success: float
+    score_health: float
+    score_invalid_action_penalty: float
+    score_step_penalty: float
+    normalized_score: float = Field(ge=0, le=100)
+
+
+class ActionResult(BaseModel):
+    """Canonical v1 Rust transition result for RL, trajectories, and replays."""
+    model_config = ConfigDict(extra="forbid")
+    observation: Observation
+    reward: int
+    reward_breakdown: RewardBreakdown
+    done: bool
+    terminal_reason: str | None = None
+    events: list[Event]
+    step_number: int = Field(ge=0)
+    simulation_time: int = Field(ge=0)
+    metrics: Metrics
+
+    @model_validator(mode="after")
+    def validate_terminal_state(self) -> "ActionResult":
+        if self.done != (self.terminal_reason is not None):
+            raise ValueError("terminal_reason must be present exactly when done")
+        return self
+
+
 class ActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: ActionType

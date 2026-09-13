@@ -1,4 +1,4 @@
-from embodied_ai.schemas import ActionRequest, Observation, WorldManifest
+from embodied_ai.schemas import ActionRequest, ActionResult, Observation, WorldManifest
 from embodied_ai.schemas import AgentDecision
 from embodied_ai.runner import RustRunClient
 from embodied_ai import runner
@@ -113,6 +113,20 @@ def test_committed_world_manifest_schema_matches_canonical_python_model():
     assert schema["required"] == generated["required"]
     assert schema["properties"]["manifest_version"]["const"] == generated["properties"]["manifest_version"]["const"] == 1
     assert schema["properties"]["world_hash"]["pattern"] == generated["properties"]["world_hash"]["pattern"]
+
+
+def test_action_result_contract_rejects_incomplete_or_inconsistent_transitions():
+    observation = {
+        "protocol_version": 1, "run_id": "run-1", "step": 1, "observation_mode": "normal",
+        "agent": {"facing": "east", "health": 100, "energy": 99, "hydration": 99, "inventory": [], "max_inventory": 4, "max_inventory_weight": 8, "status_effects": []},
+        "goal": "Reach the exit.", "visible_cells": [], "recent_events": [], "perception_note": None, "allowed_action_types": ["wait"],
+    }
+    metrics = {"escaped": False, "alive": True, "steps_taken": 1, "simulated_time": 1, "final_health": 100, "final_energy": 99, "final_hydration": 99, "invalid_actions": 0, "repeated_invalid_actions": 0, "unique_cells_visited": 1, "useful_items_acquired": 0, "carried_weight": 0, "inventory_weight_capacity": 8, "exploration_coverage": 0.1, "action_diversity": 1, "repeated_actions": 0, "action_repetition_rate": 0.0, "resource_efficiency": 0.99, "hazard_damage_taken": 0, "npc_interactions": 0, "unnecessary_actions": 0, "recovery_after_failure": False, "discovered_doors": 0, "discovered_items": 0, "discovered_hazards": 0, "discovered_npcs": 0, "first_discovery_steps": {}, "milestones": {}, "score_task_success": 0.0, "score_health": 10.0, "score_invalid_action_penalty": 0.0, "score_step_penalty": 0.1, "normalized_score": 9.9}
+    payload = {"observation": observation, "reward": -1, "reward_breakdown": {"baseline": -1, "progress": 0, "invalid_action_penalty": 0, "hazard_penalty": 0, "terminal": 0}, "done": False, "terminal_reason": None, "events": [], "step_number": 1, "simulation_time": 1, "metrics": metrics}
+    assert ActionResult.model_validate(payload).reward == -1
+    payload["terminal_reason"] = "escaped"
+    with pytest.raises(ValidationError, match="terminal_reason"):
+        ActionResult.model_validate(payload)
 
 
 def test_authoritative_run_creation_sends_an_optional_max_step_override():
