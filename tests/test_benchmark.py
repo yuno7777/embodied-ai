@@ -60,12 +60,13 @@ def test_benchmark_comparison_reports_directional_deltas():
 
 def test_generalization_comparison_requires_matching_conditions_and_reports_deltas():
     base = {"report_version": 1, "engine_version": "rust-v1", "observation_mode": "normal", "world_distribution": {"train": [0], "validation": [8000], "test": [9000]}, "generator_config": None, "generator_configs_by_partition": None, "generalization_gap": {"train_minus_validation_success_rate": .2, "train_minus_test_success_rate": .3}, "partitions": {name: {"success_rate": .5, "mean_episode_reward": 1} for name in ("train", "validation", "test")}}
-    left_partitions = {**base["partitions"], "test": {"success_rate": .5, "mean_episode_reward": 1, "hazard_kind_breakdown": {"fire": {"episodes": 1, "success_rate": 0}}}}
-    right = {**base, "experiment_id": "right", "generalization_gap": {"train_minus_validation_success_rate": .1, "train_minus_test_success_rate": .4}, "partitions": {**left_partitions, "test": {"success_rate": .75, "mean_episode_reward": 3, "hazard_kind_breakdown": {"fire": {"episodes": 1, "success_rate": 1}}}}}
+    left_partitions = {**base["partitions"], "test": {"success_rate": .5, "mean_episode_reward": 1, "hazard_kind_breakdown": {"fire": {"episodes": 1, "success_rate": 0}}, "room_count_breakdown": {"3": {"episodes": 1, "success_rate": 0}}}}
+    right = {**base, "experiment_id": "right", "generalization_gap": {"train_minus_validation_success_rate": .1, "train_minus_test_success_rate": .4}, "partitions": {**left_partitions, "test": {"success_rate": .75, "mean_episode_reward": 3, "hazard_kind_breakdown": {"fire": {"episodes": 1, "success_rate": 1}}, "room_count_breakdown": {"3": {"episodes": 1, "success_rate": 1}}}}}
     result = benchmark.compare_generalization_reports({**base, "experiment_id": "left", "partitions": left_partitions}, right)
     assert result["partitions"]["test"]["success_rate_delta"] == .25
     assert round(result["generalization_gap"]["train_minus_test_success_rate_delta"], 6) == .1
     assert result["partitions"]["test"]["hazard_kind_breakdown"]["fire"]["success_rate_delta"] == 1
+    assert result["partitions"]["test"]["room_count_breakdown"]["3"]["success_rate_delta"] == 1
     try:
         benchmark.compare_generalization_reports(base, {**right, "observation_mode": "oracle"})
     except ValueError as error:
@@ -96,9 +97,9 @@ def test_generalization_plan_rejects_overlapping_seed_sets():
 
 def test_generalization_summary_reports_held_out_gap_and_uncertainty():
     rows = [
-        {"partition": "train", "outcome": "escaped", "steps": 2, "total_reward": 5, "invalid_actions": 0, "exploration_coverage": .7, "resource_efficiency": .9, "control_elapsed_ms": 10, "hazard_kinds": ["electrical"]},
-        {"partition": "validation", "outcome": "hazard", "steps": 4, "total_reward": -2, "invalid_actions": 1, "exploration_coverage": .4, "resource_efficiency": .2, "control_elapsed_ms": 20, "hazard_kinds": ["fire"]},
-        {"partition": "test", "outcome": "hazard", "steps": 3, "total_reward": -3, "invalid_actions": 1, "exploration_coverage": .3, "resource_efficiency": .1, "control_elapsed_ms": 15, "hazard_kinds": ["fire"]},
+        {"partition": "train", "outcome": "escaped", "steps": 2, "total_reward": 5, "invalid_actions": 0, "exploration_coverage": .7, "resource_efficiency": .9, "control_elapsed_ms": 10, "hazard_kinds": ["electrical"], "room_count": 2},
+        {"partition": "validation", "outcome": "hazard", "steps": 4, "total_reward": -2, "invalid_actions": 1, "exploration_coverage": .4, "resource_efficiency": .2, "control_elapsed_ms": 20, "hazard_kinds": ["fire"], "room_count": 3},
+        {"partition": "test", "outcome": "hazard", "steps": 3, "total_reward": -3, "invalid_actions": 1, "exploration_coverage": .3, "resource_efficiency": .1, "control_elapsed_ms": 15, "hazard_kinds": ["fire"], "room_count": 3},
     ]
     report = benchmark.summarize_generalization(rows)
     assert report["partitions"]["train"]["success_rate"] == 1.0
@@ -107,6 +108,7 @@ def test_generalization_summary_reports_held_out_gap_and_uncertainty():
     assert len(report["partitions"]["test"]["success_rate_wilson_95"]) == 2
     assert report["partitions"]["validation"]["failure_reasons"] == {"hazard": 1}
     assert report["partitions"]["train"]["hazard_kind_breakdown"] == {"electrical": {"episodes": 1, "success_rate": 1.0}}
+    assert report["partitions"]["validation"]["room_count_breakdown"] == {"3": {"episodes": 1, "success_rate": 0.0}}
 
 
 def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):
@@ -116,7 +118,7 @@ def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monk
             expected["partition"] = "train"
         assert kwargs["generated_world"] == expected
         record = {"reward": 4, "metrics": {"invalid_actions": 0, "exploration_coverage": .5, "resource_efficiency": .8}, "control_elapsed_ms": 10}
-        return RemoteRunResult(f"run-{seed}", "escaped" if seed == 1 else "timeout", 2, [record], world_manifest={"scenario": {"hazards": [{"kind": "fire"}]}})
+        return RemoteRunResult(f"run-{seed}", "escaped" if seed == 1 else "timeout", 2, [record], world_manifest={"scenario": {"hazards": [{"kind": "fire"}], "rooms": [{}, {}, {}]}})
     monkeypatch.setattr(benchmark, "run_remote", fake_run)
     plan = benchmark.GeneralizationPlan(
         benchmark.SeedPartition("train", (1,)),
@@ -128,6 +130,7 @@ def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monk
     assert report["generalization_gap"]["train_minus_test_success_rate"] == 1.0
     assert all("world_manifest" in episode for episode in report["episode_results"])
     assert all(episode["hazard_kinds"] == ["fire"] for episode in report["episode_results"])
+    assert all(episode["room_count"] == 3 for episode in report["episode_results"])
     assert (tmp_path / "generalization_report.json").exists()
     assert (tmp_path / "generalization_episodes.jsonl").exists()
     manifest = tmp_path / report["experiment_manifest"]

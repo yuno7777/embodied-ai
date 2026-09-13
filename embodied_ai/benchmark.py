@@ -85,6 +85,13 @@ def generated_hazard_kinds(world_manifest: dict[str, Any] | None) -> list[str]:
     return sorted({str(hazard.get("kind")) for hazard in hazards if isinstance(hazard, dict) and isinstance(hazard.get("kind"), str)}) if isinstance(hazards, list) else []
 
 
+def generated_room_count(world_manifest: dict[str, Any] | None) -> int | None:
+    """Extract the actual generated room topology without trusting requested config."""
+    scenario = world_manifest.get("scenario") if isinstance(world_manifest, dict) else None
+    rooms = scenario.get("rooms") if isinstance(scenario, dict) else None
+    return len(rooms) if isinstance(rooms, list) else None
+
+
 def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize train/validation/test episodes and their held-out gap."""
     expected = {"train", "validation", "test"}
@@ -105,10 +112,14 @@ def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
             str(row.get("outcome") or "unknown") for row in rows_for_partition if row.get("outcome") != "escaped"
         )
         hazard_groups: dict[str, list[dict[str, Any]]] = {}
+        room_groups: dict[int, list[dict[str, Any]]] = {}
         for row in rows_for_partition:
             for kind in row.get("hazard_kinds", []):
                 if isinstance(kind, str):
                     hazard_groups.setdefault(kind, []).append(row)
+            room_count = row.get("room_count")
+            if isinstance(room_count, int) and room_count > 0:
+                room_groups.setdefault(room_count, []).append(row)
         total_steps = sum(step_counts)
         return {
             "episodes": len(rows_for_partition),
@@ -124,6 +135,10 @@ def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "hazard_kind_breakdown": {
                 kind: {"episodes": len(items), "success_rate": sum(item.get("outcome") == "escaped" for item in items) / len(items)}
                 for kind, items in sorted(hazard_groups.items())
+            },
+            "room_count_breakdown": {
+                str(room_count): {"episodes": len(items), "success_rate": sum(item.get("outcome") == "escaped" for item in items) / len(items)}
+                for room_count, items in sorted(room_groups.items())
             },
         }
 
@@ -206,6 +221,7 @@ def evaluate_generalization_remote(
             "run_id": result.run_id,
             "world_manifest": result.world_manifest,
             "hazard_kinds": generated_hazard_kinds(result.world_manifest),
+            "room_count": generated_room_count(result.world_manifest),
             "outcome": result.terminal_reason,
             "steps": result.steps,
             "total_reward": sum(record.get("reward", 0) for record in result.records if isinstance(record.get("reward", 0), (int, float))),
@@ -383,9 +399,21 @@ def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) 
             }
             for kind in sorted(set(left_hazards) | set(right_hazards))
         }
+    def room_count_deltas(name: str) -> dict[str, dict[str, float | None]]:
+        left_rooms = left_partitions[name].get("room_count_breakdown", {})
+        right_rooms = right_partitions[name].get("room_count_breakdown", {})
+        if not isinstance(left_rooms, dict) or not isinstance(right_rooms, dict):
+            return {}
+        return {
+            room_count: {
+                "episodes_delta": delta(left_rooms.get(room_count, {}).get("episodes"), right_rooms.get(room_count, {}).get("episodes")),
+                "success_rate_delta": delta(left_rooms.get(room_count, {}).get("success_rate"), right_rooms.get(room_count, {}).get("success_rate")),
+            }
+            for room_count in sorted(set(left_rooms) | set(right_rooms))
+        }
     return {
         "engine_version": left.get("engine_version"), "observation_mode": left.get("observation_mode"),
         "left_experiment_id": left.get("experiment_id"), "right_experiment_id": right.get("experiment_id"),
-        "partitions": {name: {**{f"{metric}_delta": delta(left_partitions[name].get(metric), right_partitions[name].get(metric)) for metric in metrics}, "hazard_kind_breakdown": hazard_deltas(name)} for name in sorted(expected)},
+        "partitions": {name: {**{f"{metric}_delta": delta(left_partitions[name].get(metric), right_partitions[name].get(metric)) for metric in metrics}, "hazard_kind_breakdown": hazard_deltas(name), "room_count_breakdown": room_count_deltas(name)} for name in sorted(expected)},
         "generalization_gap": {key + "_delta": delta(left.get("generalization_gap", {}).get(key), right.get("generalization_gap", {}).get(key)) for key in ("train_minus_validation_success_rate", "train_minus_test_success_rate")},
     }
