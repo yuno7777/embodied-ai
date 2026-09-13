@@ -1,0 +1,17 @@
+{
+  "additionalProperties": false,
+  "description": "Minimal authoritative control state for an active or completed episode.",
+  "properties": {
+    "paused": {"title": "Paused", "type": "boolean"},
+    "done": {"title": "Done", "type": "boolean"},
+    "terminal_reason": {
+      "anyOf": [{"type": "string"}, {"type": "null"}],
+      "default": null,
+      "title": "Terminal Reason"
+    },
+    "step": {"minimum": 0, "title": "Step", "type": "integer"}
+  },
+  "required": ["paused", "done", "step"],
+  "title": "EpisodeState",
+  "type": "object"
+}

@@ -80,6 +80,14 @@ def test_committed_observation_schema_matches_canonical_python_model():
     assert schema["properties"]["allowed_action_types"]["items"]["enum"] == generated["properties"]["allowed_action_types"]["items"]["enum"]
 
 
+def test_committed_episode_state_schema_matches_canonical_python_model():
+    schema = json.loads((Path(__file__).parents[1] / "schemas" / "episode-state.v1.json").read_text())
+    generated = EpisodeState.model_json_schema()
+    assert schema["additionalProperties"] == generated["additionalProperties"] is False
+    assert schema["required"] == generated["required"] == ["paused", "done", "step"]
+    assert schema["properties"]["step"]["minimum"] == generated["properties"]["step"]["minimum"] == 0
+
+
 def test_rust_client_validates_observation_responses_before_policy_use():
     class Response:
         def raise_for_status(self): return self
