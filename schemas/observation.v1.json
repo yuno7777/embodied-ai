@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://embodied-worlds.local/schemas/observation.v1.json",
+  "title": "Observation",
+  "description": "Canonical v1 policy observation returned by the authoritative Rust API.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "protocol_version": { "type": "integer", "const": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "step": { "type": "integer", "minimum": 0 },
+    "observation_mode": { "type": "string", "enum": ["minimal", "normal", "rich", "oracle", "noisy"] },
+    "agent": { "$ref": "#/$defs/AgentObservation" },
+    "goal": { "type": "string" },
+    "visible_cells": { "type": "array", "items": { "$ref": "#/$defs/VisibleCell" } },
+    "recent_events": { "type": "array", "items": { "type": "string" } },
+    "perception_note": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null },
+    "allowed_action_types": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["move", "inspect", "pickup", "drop", "use_item", "open", "close", "talk", "give", "wait", "rest"] }
+    }
+  },
+  "required": ["protocol_version", "run_id", "step", "observation_mode", "agent", "goal", "visible_cells", "recent_events", "allowed_action_types"],
+  "$defs": {
+    "Position": {
+      "type": "object",
+      "properties": { "x": { "type": "integer" }, "y": { "type": "integer" } },
+      "required": ["x", "y"]
+    },
+    "VisibleEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "type": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "state": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null },
+        "name": { "anyOf": [{ "type": "string" }, { "type": "null" }], "default": null }
+      },
+      "required": ["id", "type"]
+    },
+    "VisibleCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "relative_position": { "$ref": "#/$defs/Position" },
+        "terrain": { "type": "string", "enum": ["floor", "wall"] },
+        "entities": { "type": "array", "items": { "$ref": "#/$defs/VisibleEntity" } }
+      },
+      "required": ["relative_position", "terrain", "entities"]
+    },
+    "AgentObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "facing": { "type": "string", "enum": ["north", "south", "east", "west"] },
+        "health": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "energy": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "hydration": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "inventory": { "type": "array", "items": { "type": "string" } },
+        "max_inventory": { "type": "integer", "minimum": 0 },
+        "max_inventory_weight": { "type": "integer", "minimum": 0 },
+        "status_effects": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["facing", "health", "energy", "hydration", "inventory", "max_inventory", "max_inventory_weight", "status_effects"]
+    }
+  }
+}

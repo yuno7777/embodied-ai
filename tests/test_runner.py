@@ -70,6 +70,16 @@ def test_observation_contract_rejects_privileged_or_malformed_rust_payloads():
         Observation.model_validate(payload)
 
 
+def test_committed_observation_schema_matches_canonical_python_model():
+    schema = json.loads((Path(__file__).parents[1] / "schemas" / "observation.v1.json").read_text())
+    generated = Observation.model_json_schema()
+    assert schema["additionalProperties"] == generated["additionalProperties"] is False
+    assert schema["required"] == generated["required"]
+    assert schema["properties"]["protocol_version"]["const"] == generated["properties"]["protocol_version"]["const"] == 1
+    assert schema["properties"]["observation_mode"]["enum"] == generated["properties"]["observation_mode"]["enum"]
+    assert schema["properties"]["allowed_action_types"]["items"]["enum"] == generated["properties"]["allowed_action_types"]["items"]["enum"]
+
+
 def test_rust_client_validates_observation_responses_before_policy_use():
     class Response:
         def raise_for_status(self): return self
