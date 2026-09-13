@@ -58,6 +58,20 @@ def test_benchmark_comparison_reports_directional_deltas():
     assert result["mean_steps_delta"]==-2
 
 
+def test_generalization_comparison_requires_matching_conditions_and_reports_deltas():
+    base = {"report_version": 1, "engine_version": "rust-v1", "observation_mode": "normal", "world_distribution": {"train": [0], "validation": [8000], "test": [9000]}, "generator_config": None, "generator_configs_by_partition": None, "generalization_gap": {"train_minus_validation_success_rate": .2, "train_minus_test_success_rate": .3}, "partitions": {name: {"success_rate": .5, "mean_episode_reward": 1} for name in ("train", "validation", "test")}}
+    right = {**base, "experiment_id": "right", "generalization_gap": {"train_minus_validation_success_rate": .1, "train_minus_test_success_rate": .4}, "partitions": {**base["partitions"], "test": {"success_rate": .75, "mean_episode_reward": 3}}}
+    result = benchmark.compare_generalization_reports({**base, "experiment_id": "left"}, right)
+    assert result["partitions"]["test"]["success_rate_delta"] == .25
+    assert round(result["generalization_gap"]["train_minus_test_success_rate_delta"], 6) == .1
+    try:
+        benchmark.compare_generalization_reports(base, {**right, "observation_mode": "oracle"})
+    except ValueError as error:
+        assert "observation_mode" in str(error)
+    else:
+        raise AssertionError("incompatible sensor reports were compared")
+
+
 def test_generalization_plan_rejects_overlapping_seed_sets():
     train = benchmark.SeedPartition.from_range("train", 0, 2)
     validation = benchmark.SeedPartition.from_range("validation", 2, 3)

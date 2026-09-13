@@ -2,7 +2,7 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 from .analysis import check_reproducibility, filter_trajectory, load_jsonl, summarize_trajectory, verify_replay
-from .benchmark import GeneralizationPlan, SeedPartition, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, evaluate_generalization_remote, summarize_generalization
+from .benchmark import GeneralizationPlan, SeedPartition, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, compare_generalization_reports, evaluate_generalization_remote, summarize_generalization
 from .datasets import export_csv, export_jsonl, export_parquet, summarize_world_model_dataset
 from .experiments import ExperimentManifest
 from .environment import EmbodiedEnv, EmbodiedEnvConfig
@@ -38,6 +38,7 @@ def main():
     tabular_generalize=sub.add_parser('generalize-tabular'); tabular_generalize.add_argument('--train-start',type=int,default=0); tabular_generalize.add_argument('--train-count',type=int,default=20); tabular_generalize.add_argument('--validation-start',type=int,default=8_000); tabular_generalize.add_argument('--validation-count',type=int,default=10); tabular_generalize.add_argument('--test-start',type=int,default=9_000); tabular_generalize.add_argument('--test-count',type=int,default=10); tabular_generalize.add_argument('--max-steps',type=int,default=128); tabular_generalize.add_argument('--learning-rate',type=float,default=.2); tabular_generalize.add_argument('--discount',type=float,default=.95); tabular_generalize.add_argument('--epsilon',type=float,default=.2); tabular_generalize.add_argument('--observation-mode',choices=['minimal','normal','rich','oracle','noisy'],default='normal'); tabular_generalize.add_argument('--generator-config',type=Path); tabular_generalize.add_argument('--checkpoint',type=Path,default=ROOT/'data'/'checkpoints'/'tabular_q_generalization.json'); tabular_generalize.add_argument('--output',type=Path,default=ROOT/'data'/'exports'/'tabular-generalization'); tabular_generalize.add_argument('--server-url')
     c=sub.add_parser('analyze'); c.add_argument('--trajectory',type=Path,required=True); c.add_argument('--output',type=Path)
     d=sub.add_parser('compare'); d.add_argument('--left',type=Path,required=True); d.add_argument('--right',type=Path,required=True); d.add_argument('--output',type=Path)
+    generalization_compare=sub.add_parser('compare-generalization'); generalization_compare.add_argument('--left',type=Path,required=True); generalization_compare.add_argument('--right',type=Path,required=True); generalization_compare.add_argument('--output',type=Path)
     e=sub.add_parser('filter'); e.add_argument('--trajectory',type=Path,required=True); e.add_argument('--output',type=Path,required=True); e.add_argument('--action-type'); e.add_argument('--event-type'); e.add_argument('--valid-only',action='store_true'); e.add_argument('--csv',action='store_true')
     dataset_audit=sub.add_parser('audit-dataset'); dataset_audit.add_argument('--trajectory',type=Path,required=True); dataset_audit.add_argument('--output',type=Path)
     f=sub.add_parser('verify-replay'); f.add_argument('--replay',type=Path,required=True)
@@ -147,6 +148,13 @@ def main():
         print(json.dumps(report,indent=2))
     elif args.cmd=='compare':
         report=compare_benchmarks(json.loads(args.left.read_text(encoding='utf-8')),json.loads(args.right.read_text(encoding='utf-8')))
+        if args.output: args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(json.dumps(report,indent=2),encoding='utf-8')
+        print(json.dumps(report,indent=2))
+    elif args.cmd=='compare-generalization':
+        try:
+            report=compare_generalization_reports(json.loads(args.left.read_text(encoding='utf-8')),json.loads(args.right.read_text(encoding='utf-8')))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            p.error(str(error))
         if args.output: args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(json.dumps(report,indent=2),encoding='utf-8')
         print(json.dumps(report,indent=2))
     elif args.cmd=='filter':

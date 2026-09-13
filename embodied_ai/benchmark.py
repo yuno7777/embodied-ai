@@ -321,3 +321,23 @@ def compare_benchmarks(left: dict, right: dict) -> dict:
         "left_runs": left.get("runs",0),
         "right_runs": right.get("runs",0),
     }
+
+
+def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    """Compare only reports produced under identical experimental conditions."""
+    for field in ("report_version", "engine_version", "observation_mode", "world_distribution", "generator_config", "generator_configs_by_partition"):
+        if left.get(field) != right.get(field):
+            raise ValueError(f"generalization reports must match {field}")
+    expected = {"train", "validation", "test"}
+    left_partitions, right_partitions = left.get("partitions"), right.get("partitions")
+    if not isinstance(left_partitions, dict) or not isinstance(right_partitions, dict) or set(left_partitions) != expected or set(right_partitions) != expected:
+        raise ValueError("reports must contain train, validation, and test summaries")
+    metrics = ("success_rate", "mean_episode_reward", "mean_episode_length", "invalid_action_rate", "mean_exploration_coverage", "mean_resource_efficiency", "steps_per_second")
+    def delta(left_value: Any, right_value: Any) -> float | None:
+        return right_value - left_value if isinstance(left_value, (int, float)) and isinstance(right_value, (int, float)) else None
+    return {
+        "engine_version": left.get("engine_version"), "observation_mode": left.get("observation_mode"),
+        "left_experiment_id": left.get("experiment_id"), "right_experiment_id": right.get("experiment_id"),
+        "partitions": {name: {f"{metric}_delta": delta(left_partitions[name].get(metric), right_partitions[name].get(metric)) for metric in metrics} for name in sorted(expected)},
+        "generalization_gap": {key + "_delta": delta(left.get("generalization_gap", {}).get(key), right.get("generalization_gap", {}).get(key)) for key in ("train_minus_validation_success_rate", "train_minus_test_success_rate")},
+    }
