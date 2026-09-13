@@ -142,6 +142,7 @@ def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch)
     assert result.records[0]["scenario_id"] == "procedural_17"
     assert result.records[0]["scenario_version"] == 1
     assert result.records[0]["experiment_id"] == "experiment-7"
+    assert result.records[0]["world_manifest"] == {"scenario": {"id": "procedural_17", "version": 1}}
     assert result.world_manifest == {"scenario": {"id": "procedural_17", "version": 1}}
 
 
