@@ -30,7 +30,7 @@ describe("Observer", () => {
 
   it("creates a manual run and exposes its embodied state", async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      if (url.endsWith("/api/runs") && init?.method === "POST") return response({ run_id: "run-1", snapshot, observation });
+      if (url.endsWith("/api/runs") && init?.method === "POST") return response({ run_id: "run-1", snapshot, observation, world_manifest: { seed: 99, world_hash: "fnv1a64:test", generator_version: 1, generation_attempt: 0, dimensions: { x: 11, y: 7 }, validation: { solvable: true } }, reward_config: { baseline_per_step: -1, discovery_bonus: 5, invalid_action_penalty: -2, terminal_success: 100, terminal_failure: -100 } });
       return response(url.endsWith("/api/replays") ? [] : [snapshot]);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -42,6 +42,8 @@ describe("Observer", () => {
     const createRequest = fetchMock.mock.calls.find(([url, init]) => url.endsWith("/api/runs") && init?.method === "POST");
     expect(JSON.parse(String(createRequest?.[1]?.body)).controller).toBe("manual");
     expect(screen.getByText("Escape safely")).toBeInTheDocument();
+    expect(screen.getByText("Generated world · seed 99")).toBeInTheDocument();
+    expect(screen.getByText(/Hash fnv1a64:test/)).toBeInTheDocument();
     expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("visible_door");
     expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/api/runs") && JSON.parse(String((init as RequestInit).body)).observation_mode === "rich")).toBe(true);
   });
