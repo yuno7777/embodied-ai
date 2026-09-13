@@ -173,7 +173,7 @@ Pass `--model <Gemini model name>` to override `GEMINI_MODEL`, `--max-steps <pos
 .\scripts\validate-scenario.ps1
 ```
 
-Run the complete no-Docker smoke test (it starts and stops a temporary Rust process, executes the scripted Python policy, then validates the persisted events and replay):
+Run the complete no-Docker smoke test (it starts and stops a temporary Rust process, executes the scripted Python policy with the checked-in reward profile, then validates replay versioning plus reward-profile provenance across the manifest, trajectory, and replay):
 
 ```powershell
 .\scripts\smoke_test.ps1
