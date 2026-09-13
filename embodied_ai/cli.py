@@ -4,7 +4,7 @@ from pathlib import Path
 from .analysis import check_reproducibility, filter_trajectory, load_jsonl, summarize_trajectory, verify_replay
 from .benchmark import GeneralizationPlan, SeedPartition, audit_generalization_report, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, compare_generalization_reports, evaluate_generalization_remote, generator_config_fingerprint, summarize_generalization
 from .datasets import export_csv, export_jsonl, export_parquet, summarize_world_model_dataset
-from .experiments import ExperimentManifest
+from .experiments import ExperimentManifest, audit_experiment_manifest
 from .environment import EmbodiedEnv, EmbodiedEnvConfig
 from .learning import TabularQConfig, TabularQPolicy, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
 from .paths import ROOT
@@ -42,6 +42,7 @@ def main():
     generalization_audit=sub.add_parser('audit-generalization'); generalization_audit.add_argument('--report',type=Path,required=True); generalization_audit.add_argument('--output',type=Path)
     e=sub.add_parser('filter'); e.add_argument('--trajectory',type=Path,required=True); e.add_argument('--output',type=Path,required=True); e.add_argument('--action-type'); e.add_argument('--event-type'); e.add_argument('--valid-only',action='store_true'); e.add_argument('--csv',action='store_true')
     dataset_audit=sub.add_parser('audit-dataset'); dataset_audit.add_argument('--trajectory',type=Path,required=True); dataset_audit.add_argument('--output',type=Path)
+    experiment_audit=sub.add_parser('audit-experiment'); experiment_audit.add_argument('--manifest',type=Path,required=True); experiment_audit.add_argument('--trajectory',type=Path); experiment_audit.add_argument('--output',type=Path)
     f=sub.add_parser('verify-replay'); f.add_argument('--replay',type=Path,required=True)
     g=sub.add_parser('check-reproducibility'); g.add_argument('--left',type=Path,required=True); g.add_argument('--right',type=Path,required=True)
     args=p.parse_args()
@@ -174,6 +175,14 @@ def main():
     elif args.cmd=='audit-dataset':
         try:
             report=summarize_world_model_dataset(load_jsonl(args.trajectory))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            p.error(str(error))
+        if args.output: args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(json.dumps(report,indent=2),encoding='utf-8')
+        print(json.dumps(report,indent=2))
+    elif args.cmd=='audit-experiment':
+        try:
+            records=load_jsonl(args.trajectory) if args.trajectory else None
+            report=audit_experiment_manifest(args.manifest,records)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             p.error(str(error))
         if args.output: args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(json.dumps(report,indent=2),encoding='utf-8')

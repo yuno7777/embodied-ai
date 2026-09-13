@@ -7,6 +7,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -77,3 +78,68 @@ class ExperimentManifest(BaseModel):
         body = self.model_dump(mode="json") | {"fingerprint": self.fingerprint()}
         path.write_text(json.dumps(body, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return path
+
+
+def load_experiment_manifest(path: Path) -> ExperimentManifest:
+    """Load a persisted manifest only when its immutable fingerprint verifies."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("experiment manifest must be a JSON object")
+    fingerprint = payload.pop("fingerprint", None)
+    if not isinstance(fingerprint, str) or not fingerprint:
+        raise ValueError("experiment manifest requires a fingerprint")
+    manifest = ExperimentManifest.model_validate(payload)
+    if manifest.fingerprint() != fingerprint:
+        raise ValueError("experiment manifest fingerprint does not match its contents")
+    return manifest
+
+
+def audit_experiment_manifest(
+    manifest_path: Path, records: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Verify manifest integrity and, optionally, trajectory provenance.
+
+    This is intentionally local and read-only.  A trajectory is accepted only
+    when every row identifies the exact manifest experiment, sensor condition,
+    and generated world recorded for the rollout.
+    """
+    manifest = load_experiment_manifest(manifest_path)
+    receipt: dict[str, Any] = {
+        "valid": True,
+        "experiment_id": manifest.experiment_id,
+        "manifest_version": manifest.manifest_version,
+        "fingerprint": manifest.fingerprint(),
+        "engine_version": manifest.engine_version,
+        "scenario_id": manifest.scenario_id,
+        "observation_mode": manifest.observation_mode,
+        "provider": manifest.provider,
+        "trajectory_provenance_checked": records is not None,
+    }
+    if records is None:
+        return receipt
+    if any(not isinstance(record, dict) for record in records):
+        raise ValueError("trajectory records must be JSON objects")
+    for record in records:
+        if record.get("experiment_id") != manifest.experiment_id:
+            raise ValueError("trajectory experiment_id does not match its manifest")
+        if record.get("observation_mode") != manifest.observation_mode:
+            raise ValueError("trajectory observation_mode does not match its manifest")
+        if record.get("world_manifest") != manifest.generated_world:
+            raise ValueError("trajectory world_manifest does not match its manifest")
+    policy_state_mode = (
+        manifest.agent_config.get("policy_state_mode")
+        if isinstance(manifest.agent_config, dict) else None
+    )
+    if policy_state_mode is not None:
+        if any(record.get("policy_state_mode") != policy_state_mode for record in records):
+            raise ValueError("trajectory policy_state_mode does not match its manifest")
+    run_ids = {record.get("run_id") for record in records}
+    if len(run_ids) > 1:
+        raise ValueError("one experiment trajectory audit requires exactly one run_id")
+    receipt.update({
+        "trajectory_records": len(records),
+        "trajectory_run_id": next(iter(run_ids), None),
+        "world_manifest_checked": True,
+        "policy_state_mode_checked": policy_state_mode is not None,
+    })
+    return receipt

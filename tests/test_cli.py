@@ -84,6 +84,20 @@ def test_audit_dataset_cli_reports_a_missing_trajectory_as_a_usage_error(monkeyp
     assert error.value.code == 2
 
 
+def test_audit_experiment_cli_verifies_manifest_and_trajectory(monkeypatch, tmp_path, capsys):
+    manifest = cli.ExperimentManifest(
+        experiment_id="experiment", scenario_id="survival_room", seed=42, provider="scripted",
+        observation_mode="normal", memory_mode="none", memory_window=1,
+    )
+    manifest_path = manifest.persist(tmp_path)
+    trajectory = tmp_path / "run.jsonl"
+    trajectory.write_text('{"experiment_id":"experiment","run_id":"run-1","observation_mode":"normal","world_manifest":null}\n', encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "audit-experiment", "--manifest", str(manifest_path), "--trajectory", str(trajectory)])
+    cli.main()
+    receipt = capsys.readouterr().out
+    assert '"valid": true' in receipt and '"trajectory_provenance_checked": true' in receipt
+
+
 def test_audit_generalization_cli_validates_a_single_report(monkeypatch, tmp_path, capsys):
     rows = [
         {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": None},

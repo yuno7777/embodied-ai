@@ -1,6 +1,8 @@
 import json
 
-from embodied_ai.experiments import ExperimentManifest
+import pytest
+
+from embodied_ai.experiments import ExperimentManifest, audit_experiment_manifest, load_experiment_manifest
 
 
 def test_manifest_fingerprint_excludes_run_identity_and_timestamp():
@@ -41,3 +43,38 @@ def test_manifest_rejects_overlapping_evaluation_distribution():
         assert "disjoint" in str(error)
     else:
         raise AssertionError("overlapping partitions were accepted")
+
+
+def test_experiment_audit_verifies_persisted_manifest_and_trajectory_provenance(tmp_path):
+    world = {"seed": 9, "world_hash": "fnv1a64:verified"}
+    manifest = ExperimentManifest(
+        experiment_id="experiment", scenario_id="procedural", seed=9, provider="scripted",
+        observation_mode="normal", memory_mode="none", memory_window=1,
+        generated_world=world, agent_config={"policy_state_mode": "reset"},
+    )
+    path = manifest.persist(tmp_path)
+    record = {
+        "experiment_id": "experiment", "run_id": "run-1", "observation_mode": "normal",
+        "world_manifest": world, "policy_state_mode": "reset",
+    }
+    assert load_experiment_manifest(path) == manifest
+    receipt = audit_experiment_manifest(path, [record])
+    assert receipt["valid"] is True
+    assert receipt["trajectory_run_id"] == "run-1"
+    assert receipt["world_manifest_checked"] is True
+
+
+def test_experiment_audit_rejects_tampering_and_mismatched_trajectory_provenance(tmp_path):
+    manifest = ExperimentManifest(
+        experiment_id="experiment", scenario_id="survival_room", seed=9, provider="scripted",
+        observation_mode="normal", memory_mode="none", memory_window=1,
+    )
+    path = manifest.persist(tmp_path)
+    tampered = json.loads(path.read_text(encoding="utf-8"))
+    tampered["provider"] = "random_valid"
+    path.write_text(json.dumps(tampered), encoding="utf-8")
+    with pytest.raises(ValueError, match="fingerprint"):
+        audit_experiment_manifest(path)
+    path = manifest.persist(tmp_path)
+    with pytest.raises(ValueError, match="experiment_id"):
+        audit_experiment_manifest(path, [{"experiment_id": "other", "observation_mode": "normal", "world_manifest": None}])
