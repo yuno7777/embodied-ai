@@ -57,6 +57,53 @@ class Observation(BaseModel):
     allowed_action_types: list[ActionType]
 
 
+class WorldGeneratorConfig(BaseModel):
+    """Strict generator configuration copied into every generated world manifest."""
+    model_config = ConfigDict(extra="forbid")
+    generator_version: Literal[1]
+    min_width: int = Field(ge=5)
+    max_width: int = Field(ge=5)
+    min_height: int = Field(ge=5)
+    max_height: int = Field(ge=5)
+    max_attempts: int = Field(ge=1)
+    min_rooms: int = Field(ge=2, le=3)
+    max_rooms: int = Field(ge=2, le=3)
+    hazard_kinds: list[Literal["electrical", "fire", "toxic_gas"]] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "WorldGeneratorConfig":
+        if self.min_width > self.max_width or self.min_height > self.max_height:
+            raise ValueError("generator minimum dimensions cannot exceed maximum dimensions")
+        if self.min_rooms > self.max_rooms:
+            raise ValueError("generator minimum rooms cannot exceed maximum rooms")
+        if self.max_rooms == 3 and self.min_width < 7:
+            raise ValueError("three-room worlds require a minimum width of 7")
+        return self
+
+
+class WorldValidation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    geometry_valid: bool
+    spawn_valid: bool
+    required_key_reachable: bool
+    exit_reachable: bool
+    solvable: bool
+
+
+class WorldManifest(BaseModel):
+    """Canonical v1 generated-world identity from Rust, with frozen scenario data."""
+    model_config = ConfigDict(extra="forbid")
+    manifest_version: Literal[1]
+    generator_version: Literal[1]
+    seed: int = Field(ge=0)
+    generator_config: WorldGeneratorConfig
+    world_hash: str = Field(pattern=r"^fnv1a64:[0-9a-f]+$")
+    dimensions: Position
+    generation_attempt: int = Field(ge=0)
+    validation: WorldValidation
+    scenario: dict[str, object]
+
+
 class ActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: ActionType

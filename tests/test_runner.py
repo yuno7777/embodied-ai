@@ -92,6 +92,20 @@ def test_rust_client_validates_observation_responses_before_policy_use():
         client.observation("r")
 
 
+def test_rust_client_validates_generated_world_manifest_before_orchestration():
+    manifest = {
+        "manifest_version": 1, "generator_version": 1, "seed": 9,
+        "generator_config": {"generator_version": 1, "min_width": 9, "max_width": 9, "min_height": 7, "max_height": 7, "max_attempts": 1, "min_rooms": 2, "max_rooms": 2, "hazard_kinds": ["electrical"]},
+        "world_hash": "fnv1a64:abc123", "dimensions": {"x": 9, "y": 7}, "generation_attempt": 0,
+        "validation": {"geometry_valid": True, "spawn_valid": True, "required_key_reachable": True, "exit_reachable": True, "solvable": True},
+        "scenario": {"id": "generated"},
+    }
+    assert RustRunClient._with_validated_observation(object.__new__(RustRunClient), {"world_manifest": manifest})["world_manifest"]["seed"] == 9
+    manifest["generator_config"]["unknown"] = True
+    with pytest.raises(ValidationError, match="unknown"):
+        RustRunClient._with_validated_observation(object.__new__(RustRunClient), {"world_manifest": manifest})
+
+
 def test_authoritative_run_creation_sends_an_optional_max_step_override():
     calls = []
     class Response:

@@ -6,7 +6,7 @@ from typing import Any
 from dataclasses import dataclass, field
 import httpx
 from .context import AgentContext
-from .schemas import AgentDecision, ActionRequest, Observation
+from .schemas import AgentDecision, ActionRequest, Observation, WorldManifest
 
 @dataclass
 class RemoteRunResult:
@@ -24,9 +24,11 @@ class RustRunClient:
     def _validate_observation(payload: dict) -> dict:
         return Observation.model_validate(payload).model_dump(mode="json")
     def _with_validated_observation(self, response: dict) -> dict:
+        response = dict(response)
         if "observation" in response:
-            response = dict(response)
             response["observation"] = self._validate_observation(response["observation"])
+        if response.get("world_manifest") is not None:
+            response["world_manifest"] = WorldManifest.model_validate(response["world_manifest"]).model_dump(mode="json")
         return response
     def create(self, seed: int, max_steps: int | None = None, observation_mode: str = "normal", scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None) -> dict:
         if scenario_id is not None and generated_world is not None:
