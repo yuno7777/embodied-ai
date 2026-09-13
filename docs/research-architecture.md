@@ -24,7 +24,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 ## Implemented
 
 - Rust is the only simulation authority. Python submits typed actions and does not simulate world state.
-- Normal agent observations exclude researcher coordinates, hidden contents, and NPC trust. Research snapshots and evaluator output are separate.
+- Normal agent observations exclude researcher coordinates, hidden contents, and NPC trust. Local perception propagates only through reachable floor/open-door cells, so walls and closed doors block entities behind them; global ambient and perturbation events remain researcher-only. Research snapshots and evaluator output are separate.
 - Catalog scenarios and generated worlds are deterministic, versioned, and replayable.
 - Generated worlds contain a pair of rooms, an interior divider, a traversable corridor, a deterministic hazard-cooldown perturbation, and constraint-validated key-to-exit routes.
 - Train, validation, and test seed partitions are explicit and required to be disjoint in both Rust and Python evaluation planning.
@@ -43,7 +43,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 
 ## Not implemented
 
-- The tabular Q baseline is deliberately small and its default action set cannot yet manipulate object-specific IDs, so it is an infrastructure baseline rather than a strong task-solving agent.
+- The tabular Q baseline can propose open/pickup actions for locally visible object IDs, but it remains deliberately small and is an infrastructure baseline rather than a strong task-solving agent.
 - Noisy/vision/depth/audio sensors.
 - Automatic curriculum generation, distributed infrastructure, unrestricted external tools, or 3D physics.
 
