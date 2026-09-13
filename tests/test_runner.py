@@ -256,8 +256,8 @@ def test_trajectory_records_the_exact_compact_provider_context(monkeypatch):
         def close(self): pass
     class Provider:
         name = "context-test"
-        async def choose(self, _observation, _context):
-            return AgentDecision(action=ActionRequest(type="wait"), decision_summary="Safe progress.", agent_metadata={"confidence": .75, "value_estimate": 2.5, "policy_entropy": .1, "planner": {"name": "breadth_first", "expanded_nodes": 9, "planning_time_ms": 1.2}}), 3
+        def decide(self, _observation):
+            return AgentDecision(action=ActionRequest(type="wait"), decision_summary="Safe progress.", agent_metadata={"confidence": .75, "value_estimate": 2.5, "policy_entropy": .1, "planner": {"name": "breadth_first", "expanded_nodes": 9, "planning_time_ms": 1.2}})
     monkeypatch.setattr(runner, "RustRunClient", Client)
     result = runner.run_remote(Provider(), 7)
     assert result.records[0]["agent_context"] == {"recent_actions": [], "known_facts": []}

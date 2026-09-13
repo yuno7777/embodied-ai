@@ -64,6 +64,14 @@ def test_callable_policy_keeps_custom_agents_on_the_typed_public_action_boundary
     else:
         raise AssertionError("custom policies bypassed typed action validation")
 
+
+def test_callable_policy_can_emit_a_typed_decision_with_bounded_metadata():
+    policy = CallablePolicy("planner", lambda _observation: {"action": {"type": "wait"}, "decision_summary": "A bounded planner result.", "agent_metadata": {"confidence": .9, "planner": {"name": "astar", "expanded_nodes": 4, "planning_time_ms": 1}}})
+    decision = policy.decide({"public": True})
+    assert decision.action.type == "wait"
+    assert decision.agent_metadata.planner.name == "astar"
+    assert policy.act({"public": True}).type == "wait"
+
 def test_baseline_policy_lifecycle_resets_deterministically():
     explorer=ExplorerProvider()
     assert explorer.act({}).type == "inspect"

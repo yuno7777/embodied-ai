@@ -13,6 +13,13 @@ class Policy(Protocol):
     def act(self, observation: dict) -> ActionRequest: ...
 
 
+class DecisionPolicy(Protocol):
+    """Optional synchronous policy contract with bounded decision metadata."""
+    name: str
+    def reset(self, seed: int | None = None) -> None: ...
+    def decide(self, observation: dict) -> AgentDecision: ...
+
+
 class AgentProvider(Policy, Protocol):
     """Compatibility name for policies used by the existing runner."""
     def choose_action(self, observation: dict) -> ActionRequest: ...
@@ -21,7 +28,7 @@ class AgentProvider(Policy, Protocol):
 class CallablePolicy:
     """Adapter for custom public-observation policies without simulation access."""
 
-    def __init__(self, name: str, action_fn: Callable[[dict[str, Any]], ActionRequest | dict[str, Any]], reset_fn: Callable[[int | None], None] | None = None):
+    def __init__(self, name: str, action_fn: Callable[[dict[str, Any]], AgentDecision | ActionRequest | dict[str, Any]], reset_fn: Callable[[int | None], None] | None = None):
         if not name:
             raise ValueError("policy name must be non-empty")
         self.name, self._action_fn, self._reset_fn = name, action_fn, reset_fn
@@ -31,8 +38,16 @@ class CallablePolicy:
             self._reset_fn(seed)
 
     def act(self, observation: dict[str, Any]) -> ActionRequest:
-        action = self._action_fn(observation)
-        return action if isinstance(action, ActionRequest) else ActionRequest.model_validate(action)
+        return self.decide(observation).action
+
+    def decide(self, observation: dict[str, Any]) -> AgentDecision:
+        result = self._action_fn(observation)
+        if isinstance(result, AgentDecision):
+            return result
+        if isinstance(result, dict) and "action" in result:
+            return AgentDecision.model_validate(result)
+        action = result if isinstance(result, ActionRequest) else ActionRequest.model_validate(result)
+        return AgentDecision(action=action, decision_summary="custom policy action submitted to Rust authority")
 
 class ScriptedProvider:
     name = "scripted"
@@ -94,8 +109,9 @@ class CautiousProvider:
 
 class MockReasoningProvider(ScriptedProvider):
     name="mock_reasoning"
-    def decision(self, observation: dict) -> AgentDecision:
+    def decide(self, observation: dict) -> AgentDecision:
         action=self.choose_action(observation); return AgentDecision(action=action, decision_summary="Following a deterministic safe test policy.")
+    decision = decide
 
 class GeminiProvider:
     """Opt-in official SDK adapter. Unit tests never instantiate it with a live key."""

@@ -6,7 +6,7 @@ from typing import Any
 from dataclasses import dataclass, field
 import httpx
 from .context import AgentContext
-from .schemas import ActionRequest
+from .schemas import AgentDecision, ActionRequest
 
 @dataclass
 class RemoteRunResult:
@@ -95,6 +95,11 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 provider_context = context.payload()
                 if hasattr(provider, "choose"):
                     decision, provider_latency_ms=asyncio.run(provider.choose(observation,context)); action=decision.action; decision_summary=decision.decision_summary; agent_metadata=decision.agent_metadata.model_dump(exclude_none=True) if decision.agent_metadata is not None else None
+                elif hasattr(provider, "decide"):
+                    decision = provider.decide(observation)
+                    if not isinstance(decision, AgentDecision):
+                        decision = AgentDecision.model_validate(decision)
+                    action=decision.action; decision_summary=decision.decision_summary; agent_metadata=decision.agent_metadata.model_dump(exclude_none=True) if decision.agent_metadata is not None else None; provider_latency_ms=0
                 else:
                     action=(provider.act(observation) if hasattr(provider, "act") else provider.choose_action(observation))
                     if not isinstance(action, ActionRequest):
