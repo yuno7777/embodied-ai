@@ -1,5 +1,6 @@
 """Canonical versioned wire schemas used by providers, exports, and the UI boundary."""
 from __future__ import annotations
+import math
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -44,10 +45,40 @@ class ActionRequest(BaseModel):
             raise ValueError("item_id is required for give")
         return value
 
+class PlannerMetadata(BaseModel):
+    """Bounded operational telemetry, not a natural-language reasoning trace."""
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=128)
+    expanded_nodes: int | None = Field(default=None, ge=0)
+    planning_time_ms: float | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_finite_values(self) -> "PlannerMetadata":
+        if self.planning_time_ms is not None and not math.isfinite(self.planning_time_ms):
+            raise ValueError("planning_time_ms must be finite")
+        return self
+
+
+class AgentMetadata(BaseModel):
+    """Optional auditable policy signals that never affect Rust transitions."""
+    model_config = ConfigDict(extra="forbid")
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    value_estimate: float | None = None
+    policy_entropy: float | None = Field(default=None, ge=0)
+    planner: PlannerMetadata | None = None
+
+    @model_validator(mode="after")
+    def validate_finite_values(self) -> "AgentMetadata":
+        if any(value is not None and not math.isfinite(value) for value in (self.confidence, self.value_estimate, self.policy_entropy)):
+            raise ValueError("agent metadata values must be finite")
+        return self
+
+
 class AgentDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: ActionRequest
     decision_summary: str = Field(default="", max_length=500)
+    agent_metadata: AgentMetadata | None = None
 
 class RunMetadata(BaseModel):
     protocol_version: int = PROTOCOL_VERSION

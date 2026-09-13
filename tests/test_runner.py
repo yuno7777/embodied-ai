@@ -204,12 +204,13 @@ def test_provider_failure_marks_the_authoritative_run_as_provider_error(monkeypa
 
 
 def test_trajectory_records_the_exact_compact_provider_context(monkeypatch):
+    recorded_metadata = []
     class Client:
         def __init__(self, _base_url): self.steps = 0
         def scenarios(self): return [{"id": "survival_room", "version": 3}]
         def create(self, *_args): return {"run_id": "r", "observation": {"allowed_action_types": ["wait"]}}
         def status(self, _run_id): return {"done": False, "paused": False, "step": self.steps}
-        def record_decision(self, _run_id, _action, _summary, _provider, _model, _latency, _token_usage): return {}
+        def record_decision(self, _run_id, _action, _summary, _provider, _model, _latency, _token_usage, metadata): recorded_metadata.append(metadata); return {}
         def step(self, _run_id, _action):
             self.steps += 1
             return {"step_number": self.steps, "observation": {"allowed_action_types": ["wait"]}, "events": [{"type": "NpcSpoke", "message": "The exit key is in the locker."}], "reward": -1, "done": self.steps == 2, "terminal_reason": "escaped" if self.steps == 2 else None, "metrics": {}}
@@ -217,13 +218,15 @@ def test_trajectory_records_the_exact_compact_provider_context(monkeypatch):
     class Provider:
         name = "context-test"
         async def choose(self, _observation, _context):
-            return AgentDecision(action=ActionRequest(type="wait"), decision_summary="Safe progress."), 3
+            return AgentDecision(action=ActionRequest(type="wait"), decision_summary="Safe progress.", agent_metadata={"confidence": .75, "value_estimate": 2.5, "policy_entropy": .1, "planner": {"name": "breadth_first", "expanded_nodes": 9, "planning_time_ms": 1.2}}), 3
     monkeypatch.setattr(runner, "RustRunClient", Client)
     result = runner.run_remote(Provider(), 7)
     assert result.records[0]["agent_context"] == {"recent_actions": [], "known_facts": []}
     assert result.records[1]["agent_context"] == {"recent_actions": [{"type": "wait"}], "known_facts": ["The exit key is in the locker."]}
     assert result.records[0]["step_latency_ms"] >= 0
     assert result.records[1]["control_elapsed_ms"] >= result.records[0]["control_elapsed_ms"]
+    assert result.records[0]["agent_metadata"] == {"confidence": .75, "value_estimate": 2.5, "policy_entropy": .1, "planner": {"name": "breadth_first", "expanded_nodes": 9, "planning_time_ms": 1.2}}
+    assert recorded_metadata == [result.records[0]["agent_metadata"], result.records[1]["agent_metadata"]]
 
 
 def test_runner_exits_without_a_provider_call_when_researcher_aborts(monkeypatch):

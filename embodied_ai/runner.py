@@ -39,8 +39,8 @@ class RustRunClient:
     def observation(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/observation").raise_for_status().json()
     def replay(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/replay").raise_for_status().json()
     def restore(self, replay_id: str) -> dict: return self.client.post(f"/api/replays/{replay_id}/resume").raise_for_status().json()
-    def record_decision(self, run_id: str, action: ActionRequest, decision_summary: str, provider: str, model: str | None, latency_ms: int, token_usage: dict | None) -> dict:
-        return self.client.post(f"/api/runs/{run_id}/decision", json={"action": action.model_dump(exclude_none=True), "decision_summary": decision_summary, "provider": provider, "model": model, "latency_ms": max(0, round(latency_ms)), "token_usage": token_usage}).raise_for_status().json()
+    def record_decision(self, run_id: str, action: ActionRequest, decision_summary: str, provider: str, model: str | None, latency_ms: int, token_usage: dict | None, agent_metadata: dict | None = None) -> dict:
+        return self.client.post(f"/api/runs/{run_id}/decision", json={"action": action.model_dump(exclude_none=True), "decision_summary": decision_summary, "provider": provider, "model": model, "latency_ms": max(0, round(latency_ms)), "token_usage": token_usage, "agent_metadata": agent_metadata}).raise_for_status().json()
     def step(self, run_id: str, action: ActionRequest) -> dict: return self.client.post(f"/api/runs/{run_id}/step",json=action.model_dump(exclude_none=True)).raise_for_status().json()
     def provider_error(self, run_id: str) -> dict: return self.client.post(f"/api/runs/{run_id}/provider-error").raise_for_status().json()
     def stop(self, run_id: str, reason: str) -> dict: return self.client.post(f"/api/runs/{run_id}/stop", json={"reason": reason}).raise_for_status().json()
@@ -89,12 +89,12 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                     continue
                 provider_context = context.payload()
                 if hasattr(provider, "choose"):
-                    decision, provider_latency_ms=asyncio.run(provider.choose(observation,context)); action=decision.action; decision_summary=decision.decision_summary
+                    decision, provider_latency_ms=asyncio.run(provider.choose(observation,context)); action=decision.action; decision_summary=decision.decision_summary; agent_metadata=decision.agent_metadata.model_dump(exclude_none=True) if decision.agent_metadata is not None else None
                 else:
                     action=(provider.act(observation) if hasattr(provider, "act") else provider.choose_action(observation))
                     if not isinstance(action, ActionRequest):
                         action = ActionRequest.model_validate(action)
-                    provider_latency_ms=0; decision_summary="provider action submitted to Rust authority"
+                    provider_latency_ms=0; decision_summary="provider action submitted to Rust authority"; agent_metadata=None
                 if max_wall_seconds is not None and time.monotonic() - started >= max_wall_seconds:
                     client.stop(run_id, "client_timeout")
                     return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted during provider decision",world_manifest)
@@ -104,12 +104,12 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                     client.stop(run_id, "token_budget_exhausted")
                     return RemoteRunResult(run_id,"token_budget_exhausted",steps,records,f"token budget {max_total_tokens} exceeded",world_manifest)
                 total_tokens += decision_tokens
-                client.record_decision(run_id, action, decision_summary, provider.name, getattr(provider, "model", None), provider_latency_ms, token_usage)
+                client.record_decision(run_id, action, decision_summary, provider.name, getattr(provider, "model", None), provider_latency_ms, token_usage, agent_metadata)
                 step_started=time.perf_counter(); result=client.step(run_id,action); step_latency_ms=(time.perf_counter()-step_started)*1000; steps=result["step_number"]
                 if scenario is None:
                     scenario = client.scenarios()[0]
                 next_research_snapshot = client.snapshot(run_id) if include_research_snapshots else None
-                records.append({"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"observation_mode":observation_mode,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"events":result["events"],"reward":result["reward"],"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
+                records.append({"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"observation_mode":observation_mode,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"agent_metadata":agent_metadata,"events":result["events"],"reward":result["reward"],"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
                 if include_research_snapshots:
                     records[-1]["research_snapshot"] = research_snapshot
                     records[-1]["next_research_snapshot"] = next_research_snapshot

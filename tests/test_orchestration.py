@@ -12,6 +12,18 @@ def test_schema_rejects_unknown_action_fields():
     except Exception: pass
     else: raise AssertionError("invalid action passed schema validation")
 
+
+def test_agent_metadata_is_bounded_operational_telemetry():
+    decision = AgentDecision.model_validate({
+        "action": {"type": "wait"},
+        "agent_metadata": {"confidence": .8, "value_estimate": -1.5, "policy_entropy": .2, "planner": {"name": "astar", "expanded_nodes": 12, "planning_time_ms": 3.5}},
+    })
+    assert decision.agent_metadata.planner.name == "astar"
+    with pytest.raises(Exception):
+        AgentDecision.model_validate({"action": {"type": "wait"}, "agent_metadata": {"confidence": 1.1}})
+    with pytest.raises(Exception):
+        AgentDecision.model_validate({"action": {"type": "wait"}, "agent_metadata": {"planner": {"name": "", "reasoning": "hidden trace"}}})
+
 def test_context_does_not_contain_world_snapshot():
     context=AgentContext(); context.record({"visible_cells":[]},{"type":"wait"},[])
     assert "WorldSnapshot" not in SYSTEM_PROMPT and "visible_cells" not in context.payload()

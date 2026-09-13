@@ -211,6 +211,21 @@ struct TokenUsage {
     total_tokens: Option<u64>,
 }
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlannerMetadata {
+    name: String,
+    expanded_nodes: Option<u32>,
+    planning_time_ms: Option<f64>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AgentMetadata {
+    confidence: Option<f64>,
+    value_estimate: Option<f64>,
+    policy_entropy: Option<f64>,
+    planner: Option<PlannerMetadata>,
+}
+#[derive(Clone, Serialize, Deserialize)]
 struct DecisionRecord {
     step: u32,
     action: Action,
@@ -220,6 +235,8 @@ struct DecisionRecord {
     latency_ms: Option<u64>,
     #[serde(default)]
     token_usage: Option<TokenUsage>,
+    #[serde(default)]
+    agent_metadata: Option<AgentMetadata>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -230,6 +247,7 @@ struct DecisionInput {
     model: Option<String>,
     latency_ms: Option<u64>,
     token_usage: Option<TokenUsage>,
+    agent_metadata: Option<AgentMetadata>,
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -1032,6 +1050,25 @@ async fn record_decision(
             "provider and model must be at most 128 characters".into(),
         ));
     }
+    if let Some(metadata) = &input.agent_metadata {
+        let finite = [metadata.confidence, metadata.value_estimate, metadata.policy_entropy]
+            .into_iter()
+            .flatten()
+            .all(f64::is_finite);
+        let confidence_valid = metadata.confidence.is_none_or(|value| (0.0..=1.0).contains(&value));
+        let entropy_valid = metadata.policy_entropy.is_none_or(|value| value >= 0.0);
+        let planner_valid = metadata.planner.as_ref().is_none_or(|planner| {
+            !planner.name.is_empty()
+                && planner.name.chars().count() <= 128
+                && planner.planning_time_ms.is_none_or(|value| value.is_finite() && value >= 0.0)
+        });
+        if !finite || !confidence_valid || !entropy_valid || !planner_valid {
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "agent_metadata contains invalid bounded telemetry".into(),
+            ));
+        }
+    }
     let mut runs = state.runs.lock().await;
     let run = runs
         .get_mut(&id)
@@ -1047,6 +1084,7 @@ async fn record_decision(
         model: input.model,
         latency_ms: input.latency_ms,
         token_usage: input.token_usage,
+        agent_metadata: input.agent_metadata,
     };
     run.decisions.push(decision.clone());
     persist(
@@ -2054,7 +2092,7 @@ mod tests {
                     .uri(format!("/api/runs/{run_id}/decision"))
                     .header("content-type", "application/json")
                     .body(Body::from(
-                        r#"{"action":{"type":"wait"},"decision_summary":"Assess the room.","provider":"scripted","model":null,"latency_ms":0,"token_usage":{"input_tokens":12,"output_tokens":7,"cached_tokens":null,"total_tokens":19}}"#,
+                        r#"{"action":{"type":"wait"},"decision_summary":"Assess the room.","provider":"scripted","model":null,"latency_ms":0,"token_usage":{"input_tokens":12,"output_tokens":7,"cached_tokens":null,"total_tokens":19},"agent_metadata":{"confidence":0.8,"value_estimate":1.5,"policy_entropy":0.2,"planner":{"name":"astar","expanded_nodes":12,"planning_time_ms":3.5}}}"#,
                     ))
                     .unwrap(),
             )
@@ -2083,6 +2121,7 @@ mod tests {
             replay_json["decisions"][0]["token_usage"]["total_tokens"],
             19
         );
+        assert_eq!(replay_json["decisions"][0]["agent_metadata"]["planner"]["name"], "astar");
     }
 
     #[tokio::test]

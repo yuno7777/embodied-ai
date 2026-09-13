@@ -118,6 +118,7 @@ class AgentRunManager:
                         "observation": json.dumps(record["observation"]),
                         "next_observation": json.dumps(record.get("next_observation")),
                         "agent_context": json.dumps(record["agent_context"]),
+                        "agent_metadata": json.dumps(record.get("agent_metadata")),
                         "events": json.dumps(record["events"]),
                         "chosen_action": json.dumps(record["chosen_action"]),
                         "metrics": json.dumps(record["metrics"]),
