@@ -115,6 +115,7 @@ python -m embodied_ai.cli evaluate-tabular --generator-config configs/generator/
 python -m embodied_ai.cli generalize-tabular --train-count 100 --validation-count 20 --test-count 20 --checkpoint data/checkpoints/tabular_q_generalization.json --output data/exports/tabular-generalization --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider gemini --max-wall-seconds 300 --max-total-tokens 20000 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider cautious --observation-mode noisy --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli run --provider cautious --policy-state-mode preserve --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider cautious --resume-run-id YOUR_LIVE_RUN_ID --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider cautious --restore-replay-id YOUR_PERSISTED_REPLAY_ID --server-url http://127.0.0.1:8080
 ```

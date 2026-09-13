@@ -28,6 +28,8 @@ Before the runner submits a model action, it records `POST /api/runs/{id}/decisi
 
 Python trajectory exports record `agent_context` beside each observation. It is the compact context payload supplied to the provider immediately before that decision, never an authoritative snapshot or hidden-state projection.
 
+Policy-local state is explicitly separate from that runner-owned context. `run_remote` and the `run` CLI record `policy_state_mode`: `reset` (the default) invokes the policy reset hook with the run seed; `preserve` leaves a reused policy instance intact for a deliberately labeled continual-memory experiment. Neither mode changes Rust world reset semantics, and each trajectory row plus experiment manifest records the selected mode.
+
 For offline world-model research, the headless CLI may be invoked with `--include-research-snapshots`. That explicit local opt-in records a before/after `WorldSnapshot` pair beside each transition as `research_snapshot` and `next_research_snapshot`; it does not alter either the observation or provider context. Dataset conversion excludes the privileged pair unless its caller explicitly requests privileged state.
 
 `embodied-ai audit-dataset --trajectory <run.jsonl>` provides a local coverage report for exported transitions, action/outcome mix, sensor modes, exact next-observation availability, and complete versus partial privileged snapshot pairs.

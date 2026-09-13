@@ -38,7 +38,7 @@ The report validates contiguous decisions and reports action/event distributions
 
 Replay `control` statistics measure non-overlapping wall-clock intervals. New runs default to provider control; the observer creates manual runs with `controller: "manual"`. Pausing starts paused time; the first paused manual step starts manual-control time until resume returns to the run's original controller. Terminal runs freeze all counters, and restoring a replay excludes offline downtime. These values include waiting/thinking time, unlike the earlier execution-only counters, so old exports are not directly comparable. `simulation_latency_us` stores engine execution latency for each submitted step, separately from the Python HTTP round-trip latency.
 
-Agent context defaults to the five most recent actions. Set `--memory-window 1..100` on the run command, or use the observer's Memory window field, to change this bound. Observations retained by Python use the same bound; `memory_mode=none` still supplies no memory. Known facts remain independently capped at 12 in the provider payload.
+Agent context defaults to the five most recent actions. Set `--memory-window 1..100` on the run command, or use the observer's Memory window field, to change this bound. Observations retained by Python use the same bound; `memory_mode=none` still supplies no memory. Known facts remain independently capped at 12 in the provider payload. Policy-local state has a separate lifecycle: `--policy-state-mode reset` is the reproducible default, while `preserve` is an explicitly persisted option for a reused policy instance in a continual-memory experiment.
 
 The simulation core is benchmarked separately from HTTP, rendering and provider latency:
 
