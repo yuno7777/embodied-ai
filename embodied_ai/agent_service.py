@@ -129,7 +129,7 @@ class AgentRunManager:
                 ],
                 self.output_directory / f"{result.run_id}.parquet",
             )
-            exports = {"jsonl": str(jsonl), "parquet": str(self.output_directory / f"{result.run_id}.parquet")}
+            exports.update({"jsonl": str(jsonl), "parquet": str(self.output_directory / f"{result.run_id}.parquet")})
         with self._lock:
             self._runs[result.run_id] = {
                 "run_id": result.run_id,
