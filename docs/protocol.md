@@ -16,6 +16,8 @@ Action values are validated at the Python provider boundary and again by the Rus
 
 Each replay pairs its initial and per-step researcher `timeline` snapshots with an equally indexed `observations` array and exact structured `actions` stream. Those observations are the exact filtered payloads visible to the agent at the corresponding moment, so playback never exposes hidden-state information as agent perception. Active persisted replays can be reconstructed under a new run ID through `POST /api/replays/{id}/resume`; restore refuses terminal, incomplete, version-mismatched, or state-divergent replays.
 
+Each state-changing server endpoint persists its event log and replay before returning success. A filesystem or serialization failure is logged and returned as an HTTP `500`; the server does not silently claim that an unreplayable transition was saved.
+
 `GET /api/scenarios/{id}` returns the validated scenario definition for an available scenario. `GET /api/benchmarks` returns authoritative aggregates over persisted and live run snapshots; it reports completed-run outcome, resource, score, invalid-action, hazard, simulated-time, provider-call, available decision-latency, and supplied input/output-token summaries without fabricating token or cost data.
 
 `POST /api/worlds/generate` and `generated_world` run requests may include a `partition` of `train`, `validation`, or `test`. When supplied, Rust verifies that the generated-world seed belongs to the named built-in distribution before generation. This is an optional assertion for standard experiments, not a replacement for explicitly recorded custom seed-list distributions.
