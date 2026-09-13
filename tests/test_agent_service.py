@@ -67,3 +67,8 @@ def test_agent_request_validates_lightweight_runtime_budgets():
         AgentRunRequest(max_wall_seconds=0)
     with pytest.raises(Exception):
         AgentRunRequest(max_total_tokens=0)
+
+
+def test_agent_request_accepts_explicit_sensor_ablation_modes():
+    assert AgentRunRequest(observation_mode="noisy").observation_mode == "noisy"
+    assert AgentRunRequest(observation_mode="oracle").observation_mode == "oracle"

@@ -48,6 +48,13 @@ describe("Observer", () => {
     expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/api/runs") && JSON.parse(String((init as RequestInit).body)).observation_mode === "rich")).toBe(true);
   });
 
+  it("exposes reproducible noisy and oracle sensor selections", () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => response(url.endsWith("/api/replays") ? [] : [snapshot])));
+    render(<Observer />);
+    expect(screen.getByRole("option", { name: "Noisy local" })).toHaveValue("noisy");
+    expect(screen.getByRole("option", { name: "Oracle map (research)" })).toHaveValue("oracle");
+  });
+
   it("uses the paused-only manual-step endpoint for human control", async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url.endsWith("/api/runs") && init?.method === "POST") return response({ run_id: "run-1", snapshot });

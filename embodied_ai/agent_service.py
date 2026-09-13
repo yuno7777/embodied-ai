@@ -33,7 +33,7 @@ class AgentRunRequest(BaseModel):
     model: str | None = Field(default=None, max_length=128)
     memory_mode: Literal["none", "recent"] = "recent"
     memory_window: int = Field(default=5, ge=1, le=100, strict=True)
-    observation_mode: Literal["minimal", "normal", "rich"] = "normal"
+    observation_mode: Literal["minimal", "normal", "rich", "oracle", "noisy"] = "normal"
     max_steps: int | None = Field(default=None, ge=1, le=10_000)
     max_wall_seconds: float | None = Field(default=None, gt=0, le=86_400)
     max_total_tokens: int | None = Field(default=None, ge=1, le=100_000_000)
