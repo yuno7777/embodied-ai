@@ -7,6 +7,7 @@ from typing import Any
 import json
 import hashlib
 from pathlib import Path
+from .schemas import ActionRequest
 
 
 class TrajectoryValidationError(ValueError):
@@ -82,6 +83,9 @@ def filter_trajectory(records: list[dict[str, Any]], *, action_type: str | None 
 def verify_replay(replay: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(replay, dict):
         raise TrajectoryValidationError("Replay must be an object.")
+    replay_version = replay.get("replay_version", 1)
+    if type(replay_version) is not int or replay_version != 1:
+        raise TrajectoryValidationError("Replay has an unsupported replay_version.")
     timeline=replay.get("timeline")
     observations=replay.get("observations")
     snapshot=replay.get("snapshot")
@@ -103,6 +107,18 @@ def verify_replay(replay: dict[str, Any]) -> dict[str, Any]:
             raise TrajectoryValidationError("Replay timeline steps must be contiguous.")
     if snapshot != timeline[-1]:
         raise TrajectoryValidationError("Replay snapshot does not match the final frame.")
+    actions = replay.get("actions")
+    if not isinstance(actions, list):
+        raise TrajectoryValidationError("Replay actions must be an array.")
+    if len(actions) != snapshot["step"]:
+        raise TrajectoryValidationError("Replay action count must match the final simulation step.")
+    for action in actions:
+        if not isinstance(action, dict):
+            raise TrajectoryValidationError("Replay actions must be structured objects.")
+        try:
+            ActionRequest.model_validate(action)
+        except ValueError as error:
+            raise TrajectoryValidationError(f"Replay contains an invalid action: {error}") from error
     for frame, observation in zip(timeline, observations):
         if "step" in observation and observation["step"] != frame["step"]:
             raise TrajectoryValidationError("Replay observation step does not match its frame.")
