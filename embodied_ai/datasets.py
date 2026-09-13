@@ -49,7 +49,10 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
             "step": record.get("step"),
             "observation_t": record.get("observation"),
             "action_t": record.get("chosen_action"),
-            "observation_t_plus_1": (next_record or record).get("observation"),
+            # Runner records carry the exact post-action policy observation.
+            # Fall back to the following record for pre-v2 exports, preserving
+            # backward compatibility without corrupting new terminal steps.
+            "observation_t_plus_1": record.get("next_observation", (next_record or record).get("observation")),
             "reward_t": record.get("reward"),
             "terminated_t": bool(record.get("done")) and record.get("terminal_reason") not in {"timeout", "time_limit", "client_timeout", "token_budget_exhausted"},
             "truncated_t": bool(record.get("done")) and record.get("terminal_reason") in {"timeout", "time_limit", "client_timeout", "token_budget_exhausted"},

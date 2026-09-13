@@ -227,7 +227,7 @@ def benchmark_remote(runs: int, seed_start: int, output: Path, base_url: str, pr
     export_parquet(rows,output/"runs.parquet")
     export_csv(rows,output/"runs.csv")
     export_jsonl(trajectories,output/"trajectories.jsonl")
-    export_parquet([{**record,"observation":json.dumps(record["observation"]),"agent_context":json.dumps(record["agent_context"]),"events":json.dumps(record["events"]),"chosen_action":json.dumps(record["chosen_action"]),"metrics":json.dumps(record["metrics"])} for record in trajectories],output/"trajectories.parquet")
+    export_parquet([{**record,"observation":json.dumps(record["observation"]),"next_observation":json.dumps(record.get("next_observation")),"agent_context":json.dumps(record["agent_context"]),"events":json.dumps(record["events"]),"chosen_action":json.dumps(record["chosen_action"]),"metrics":json.dumps(record["metrics"])} for record in trajectories],output/"trajectories.parquet")
     export_parquet(event_rows,output/"events.parquet")
     export_csv(event_rows,output/"events.csv")
     export_parquet(decision_rows,output/"decisions.parquet")

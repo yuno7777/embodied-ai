@@ -59,7 +59,7 @@ def main():
             manifest=manifest.model_copy(update={"generated_world":result.world_manifest})
         manifest_path=manifest.persist(directory)
         jsonl=export_jsonl(result.records,directory/f'{result.run_id}.jsonl')
-        export_parquet([{**record,"observation":json.dumps(record["observation"]),"agent_context":json.dumps(record["agent_context"]),"events":json.dumps(record["events"]),"chosen_action":json.dumps(record["chosen_action"]),"metrics":json.dumps(record["metrics"])} for record in result.records],directory/f'{result.run_id}.parquet')
+        export_parquet([{**record,"observation":json.dumps(record["observation"]),"next_observation":json.dumps(record.get("next_observation")),"agent_context":json.dumps(record["agent_context"]),"events":json.dumps(record["events"]),"chosen_action":json.dumps(record["chosen_action"]),"metrics":json.dumps(record["metrics"])} for record in result.records],directory/f'{result.run_id}.parquet')
         print(json.dumps({"run_id":result.run_id,"experiment_id":manifest.experiment_id,"experiment_manifest":str(manifest_path),"outcome":result.terminal_reason,"stop_detail":result.stop_detail,"steps":result.steps,"events":sum(len(record["events"]) for record in result.records),"jsonl":str(jsonl)}))
     elif args.cmd=='benchmark':
         if not args.server_url: p.error('Benchmarks require --server-url for the authoritative Rust simulation. Start .\\scripts\\dev.ps1 first.')
