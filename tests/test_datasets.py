@@ -4,7 +4,7 @@ from embodied_ai.datasets import world_model_transitions
 def test_world_model_transitions_preserve_episode_boundaries_and_policy_observations():
     records = [
         {"experiment_id": "experiment-a", "world_manifest": {"world_hash": "fnv1a64:a"}, "run_id": "a", "step": 1, "observation": {"step": 0}, "chosen_action": {"type": "wait"}, "reward": 1, "done": False, "research_snapshot": {"hidden": 1}},
-        {"run_id": "a", "step": 2, "observation": {"step": 1}, "chosen_action": {"type": "wait"}, "reward": 2, "done": True, "terminal_reason": "escaped", "research_snapshot": {"hidden": 2}},
+        {"experiment_id": "experiment-a", "world_manifest": {"world_hash": "fnv1a64:a"}, "run_id": "a", "step": 2, "observation": {"step": 1}, "chosen_action": {"type": "wait"}, "reward": 2, "done": True, "terminal_reason": "escaped", "research_snapshot": {"hidden": 2}},
         {"run_id": "b", "step": 1, "observation": {"step": 0}, "chosen_action": {"type": "wait"}, "reward": 0, "done": True, "terminal_reason": "timeout"},
     ]
     transitions = world_model_transitions(records)
