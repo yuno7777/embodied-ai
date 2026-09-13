@@ -409,6 +409,26 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
             raise ValueError("generalization partition summaries must match episode_results")
 
 
+def audit_generalization_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Validate one report and return a compact, shareable audit receipt."""
+    validate_generalization_report(report)
+    episodes = report.get("episode_results")
+    return {
+        "valid": True,
+        "report_version": report["report_version"],
+        "engine_version": report["engine_version"],
+        "observation_mode": report["observation_mode"],
+        "experiment_id": report.get("experiment_id"),
+        "episode_provenance_checked": isinstance(episodes, list),
+        "episode_count": len(episodes) if isinstance(episodes, list) else None,
+        "world_distribution": report["world_distribution"],
+        "partition_episode_counts": {
+            name: report["partitions"][name].get("episodes")
+            for name in ("train", "validation", "test")
+        },
+    }
+
+
 def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     """Compare only reports produced under identical experimental conditions."""
     validate_generalization_report(left)

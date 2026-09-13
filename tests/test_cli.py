@@ -72,6 +72,26 @@ def test_audit_dataset_cli_reports_a_missing_trajectory_as_a_usage_error(monkeyp
     assert error.value.code == 2
 
 
+def test_audit_generalization_cli_validates_a_single_report(monkeypatch, tmp_path, capsys):
+    rows = [
+        {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": None},
+        {"partition": "validation", "seed": 2, "outcome": "timeout", "observation_mode": "normal", "generator_config": None},
+        {"partition": "test", "seed": 3, "outcome": "timeout", "observation_mode": "normal", "generator_config": None},
+    ]
+    report = cli.summarize_generalization(rows) | {
+        "engine_version": "rust-v1", "observation_mode": "normal",
+        "world_distribution": {"train": [1], "validation": [2], "test": [3]},
+        "generator_config": None, "generator_configs_by_partition": None,
+        "episode_results": rows,
+    }
+    path = tmp_path / "generalization_report.json"
+    path.write_text(__import__("json").dumps(report), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "audit-generalization", "--report", str(path)])
+    cli.main()
+    receipt = capsys.readouterr().out
+    assert '"valid": true' in receipt and '"episode_provenance_checked": true' in receipt
+
+
 def test_generalize_cli_defaults_match_authoritative_seed_partitions(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setattr(
@@ -184,3 +204,4 @@ def test_tabular_generalization_cli_trains_once_and_reports_disjoint_partitions(
     assert '"success_rate": 1.0' in (tmp_path/'report'/'tabular_generalization_report.json').read_text()
     report = __import__('json').loads((tmp_path/'report'/'tabular_generalization_report.json').read_text())
     assert report['engine_version'] == 'rust-v1' and report['generator_config'] == {'min_rooms': 2, 'max_rooms': 2}
+    assert cli.audit_generalization_report(report)['valid'] is True
