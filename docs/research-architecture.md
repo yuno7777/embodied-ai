@@ -25,6 +25,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 
 - Rust is the only simulation authority. Python submits typed actions and does not simulate world state.
 - Normal agent observations exclude researcher coordinates, hidden contents, and NPC trust. Local perception propagates only through reachable floor/open-door cells, so walls and closed doors block entities behind them; global ambient and perturbation events remain researcher-only. Research snapshots and evaluator output are separate.
+- Sensor ablations are explicit and replayable: `minimal`, `normal` local symbolic, `rich` extended local, `noisy` local symbolic with deterministic 20% cell dropout, and opt-in `oracle` full-map symbolic baseline. Oracle is not researcher state and must be reported separately from restricted-perception results.
 - Catalog scenarios and generated worlds are deterministic, versioned, and replayable.
 - Generated worlds contain a deterministic two- or three-room corridor graph, interior dividers, traversable corridors, a deterministic hazard-cooldown perturbation, and constraint-validated key-to-exit routes. Within that family, seeded generation varies dimensions, corridor row, spawn, key, water, container, hazard, NPC, and perturbation timing. Generator configuration can pin either topology family for reproducible distribution-shift experiments.
 - Train, validation, and test seed partitions are explicit and required to be disjoint in both Rust and Python evaluation planning.

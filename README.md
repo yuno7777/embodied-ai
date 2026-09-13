@@ -106,6 +106,7 @@ python -m embodied_ai.cli generalize --provider cautious --train-generator-confi
 python -m embodied_ai.cli train-tabular --episodes 100 --checkpoint data/checkpoints/tabular_q.json --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli evaluate-tabular --checkpoint data/checkpoints/tabular_q.json --seed-start 9000 --episodes 20 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider gemini --max-wall-seconds 300 --max-total-tokens 20000 --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli run --provider cautious --observation-mode noisy --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider cautious --resume-run-id YOUR_LIVE_RUN_ID --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider cautious --restore-replay-id YOUR_PERSISTED_REPLAY_ID --server-url http://127.0.0.1:8080
 ```
@@ -128,7 +129,7 @@ With `GEMINI_API_KEY` set in `.env`, run Gemini against the Rust authority with:
 python -m embodied_ai.cli run --provider gemini --server-url http://127.0.0.1:8080
 ```
 
-Pass `--model <Gemini model name>` to override `GEMINI_MODEL`, `--max-steps <positive integer>` to create an authoritative run with a shorter timeout, or `--observation-mode minimal|normal|rich` for a reproducible perception ablation.
+Pass `--model <Gemini model name>` to override `GEMINI_MODEL`, `--max-steps <positive integer>` to create an authoritative run with a shorter timeout, or `--observation-mode minimal|normal|rich|noisy|oracle` for a reproducible perception ablation. `normal` is local symbolic perception, `noisy` applies deterministic 20% local-cell dropout, and `oracle` exposes the full symbolic map only as an explicitly labeled research baseline. Oracle results must not be compared as restricted-perception agent performance.
 
 ## Verify
 
