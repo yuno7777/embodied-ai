@@ -69,3 +69,8 @@ Before interpreting a report, run `audit-generalization`. It rejects empty or
 overlapping seed splits, ambiguous shared versus per-split generator
 configuration, and any supplied episode evidence that does not reconstruct the
 claimed split summaries.
+
+Generated reports include a SHA-256 fingerprint for their canonical shared
+generator configuration, or one fingerprint per split when layouts differ.
+The audit receipt exposes these identities without requiring a researcher to
+visually compare JSON key order.

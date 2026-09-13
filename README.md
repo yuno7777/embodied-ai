@@ -125,7 +125,7 @@ Start the Rust server before either command. Rust events are persisted as replay
 
 `compare-generalization` compares split metrics, held-out gaps, hazard-kind success rates, and room-topology success rates only after verifying complete provenance: report and engine versions, sensor mode, seed distribution, generator configuration, and (when present) every episode row against its declared split and summary. It rejects missing or incompatible metadata instead of producing misleading deltas.
 
-`audit-generalization` performs that provenance check on one report and emits a compact receipt containing its experimental conditions, split counts, and whether episode-level evidence was checked. It is local and read-only; use it before comparing, archiving, or sharing a report.
+`audit-generalization` performs that provenance check on one report and emits a compact receipt containing its experimental conditions, canonical generator-config fingerprints, split counts, and whether episode-level evidence was checked. It is local and read-only; use it before comparing, archiving, or sharing a report.
 
 Benchmark summaries report control wall-clock measurements separately from `simulation_steps_per_second`, which is derived from the Rust server's authoritative per-step simulation timings. Provider/model latency is therefore not presented as simulator throughput.
 
