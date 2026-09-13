@@ -168,6 +168,8 @@ def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch)
     assert result.records[0]["experiment_id"] == "experiment-7"
     assert result.records[0]["world_manifest"] == {"scenario": {"id": "procedural_17", "version": 1}}
     assert result.records[0]["next_observation"] == {"allowed_action_types": ["wait"]}
+    assert result.initialization_latency_ms is not None and result.initialization_latency_ms >= 0
+    assert result.records[0]["initialization_latency_ms"] == result.initialization_latency_ms
     assert result.world_manifest == {"scenario": {"id": "procedural_17", "version": 1}}
 
 
@@ -301,7 +303,7 @@ def test_runner_stops_before_submitting_an_action_that_exceeds_token_budget(monk
     if budget == "wall":
         from types import SimpleNamespace
         ticks = iter([0.0, 0.1, 2.0])
-        monkeypatch.setattr(runner, "time", SimpleNamespace(monotonic=lambda: next(ticks)))
+        monkeypatch.setattr(runner, "time", SimpleNamespace(monotonic=lambda: next(ticks), perf_counter=lambda: 0.0))
         result = runner.run_remote(Provider(), 7, max_wall_seconds=1)
         reason = "client_timeout"
     else:

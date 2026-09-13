@@ -342,7 +342,7 @@ def benchmark_remote(runs: int, seed_start: int, output: Path, base_url: str, pr
         final_metrics=result.records[-1].get("metrics",{}) if result.records else {}
         step_latencies=[record.get("step_latency_ms") for record in result.records if isinstance(record.get("step_latency_ms"),(int,float))]
         elapsed=result.records[-1].get("control_elapsed_ms") if result.records else None
-        row={"run_id":result.run_id,"seed":seed_start+index,"scenario_id":"survival_room","provider":provider.name,"outcome":result.terminal_reason,"steps":result.steps,"score":final_metrics.get("normalized_score",100 if result.terminal_reason=="escaped" else 0),"mean_step_latency_ms":sum(step_latencies)/len(step_latencies) if step_latencies else None,"control_elapsed_ms":elapsed,"simulation_latency_us":sum(simulation_latency_us),"simulation_steps_per_second":result.steps/(sum(simulation_latency_us)/1_000_000) if simulation_latency_us and sum(simulation_latency_us)>0 else None}
+        row={"run_id":result.run_id,"seed":seed_start+index,"scenario_id":"survival_room","provider":provider.name,"outcome":result.terminal_reason,"steps":result.steps,"score":final_metrics.get("normalized_score",100 if result.terminal_reason=="escaped" else 0),"initialization_latency_ms":result.initialization_latency_ms,"mean_step_latency_ms":sum(step_latencies)/len(step_latencies) if step_latencies else None,"control_elapsed_ms":elapsed,"simulation_latency_us":sum(simulation_latency_us),"simulation_steps_per_second":result.steps/(sum(simulation_latency_us)/1_000_000) if simulation_latency_us and sum(simulation_latency_us)>0 else None}
         return row,result.records
     with ThreadPoolExecutor(max_workers=min(concurrency,runs)) as executor:
         completed=list(executor.map(execute,range(runs)))
@@ -353,16 +353,17 @@ def benchmark_remote(runs: int, seed_start: int, output: Path, base_url: str, pr
     export_parquet(rows,output/"runs.parquet")
     export_csv(rows,output/"runs.csv")
     export_jsonl(trajectories,output/"trajectories.jsonl")
-    export_parquet([{**record,"observation":json.dumps(record["observation"]),"next_observation":json.dumps(record.get("next_observation")),"agent_context":json.dumps(record["agent_context"]),"events":json.dumps(record["events"]),"chosen_action":json.dumps(record["chosen_action"]),"metrics":json.dumps(record["metrics"])} for record in trajectories],output/"trajectories.parquet")
+    export_parquet([{**record,"observation":json.dumps(record["observation"]),"next_observation":json.dumps(record.get("next_observation")),"agent_context":json.dumps(record["agent_context"]),"agent_metadata":json.dumps(record.get("agent_metadata")),"events":json.dumps(record["events"]),"chosen_action":json.dumps(record["chosen_action"]),"metrics":json.dumps(record["metrics"])} for record in trajectories],output/"trajectories.parquet")
     export_parquet(event_rows,output/"events.parquet")
     export_csv(event_rows,output/"events.csv")
     export_parquet(decision_rows,output/"decisions.parquet")
     export_csv(decision_rows,output/"decisions.csv")
     step_latencies=[r["mean_step_latency_ms"] for r in rows if isinstance(r["mean_step_latency_ms"],(int,float))]
     control_times=[r["control_elapsed_ms"] for r in rows if isinstance(r["control_elapsed_ms"],(int,float))]
+    initialization_times=[r["initialization_latency_ms"] for r in rows if isinstance(r["initialization_latency_ms"],(int,float))]
     simulation_times=[r["simulation_latency_us"] for r in rows if isinstance(r["simulation_latency_us"],(int,float))]
     total_simulation_us=sum(simulation_times)
-    summary={"scenario_id":"survival_room","provider":provider_name,"runs":runs,"seed_start":seed_start,"concurrency":concurrency,"success_rate":sum(r["outcome"]=="escaped" for r in rows)/runs,"mean_score":sum(r["score"] for r in rows)/runs,"mean_steps":sum(r["steps"] for r in rows)/runs,"mean_step_latency_ms":sum(step_latencies)/len(step_latencies) if step_latencies else None,"mean_control_elapsed_ms":sum(control_times)/len(control_times) if control_times else None,"simulation_steps_per_second":sum(r["steps"] for r in rows)/(total_simulation_us/1_000_000) if total_simulation_us>0 else None,"engine_version":"rust-v1","base_url":base_url,"seed_results":[{"seed":r["seed"],"outcome":r["outcome"],"score":r["score"],"steps":r["steps"],"simulation_latency_us":r["simulation_latency_us"]} for r in rows]}
+    summary={"scenario_id":"survival_room","provider":provider_name,"runs":runs,"seed_start":seed_start,"concurrency":concurrency,"success_rate":sum(r["outcome"]=="escaped" for r in rows)/runs,"mean_score":sum(r["score"] for r in rows)/runs,"mean_steps":sum(r["steps"] for r in rows)/runs,"mean_initialization_latency_ms":sum(initialization_times)/len(initialization_times) if initialization_times else None,"mean_step_latency_ms":sum(step_latencies)/len(step_latencies) if step_latencies else None,"mean_control_elapsed_ms":sum(control_times)/len(control_times) if control_times else None,"simulation_steps_per_second":sum(r["steps"] for r in rows)/(total_simulation_us/1_000_000) if total_simulation_us>0 else None,"engine_version":"rust-v1","base_url":base_url,"seed_results":[{"seed":r["seed"],"outcome":r["outcome"],"score":r["score"],"steps":r["steps"],"initialization_latency_ms":r["initialization_latency_ms"],"simulation_latency_us":r["simulation_latency_us"]} for r in rows]}
     (output/"benchmark_summary.json").write_text(json.dumps(summary,indent=2)); return summary
 
 
@@ -383,6 +384,7 @@ def benchmark_parallel_scaling(
             "workers": count,
             "runs": report["runs"],
             "simulation_steps_per_second": report["simulation_steps_per_second"],
+            "mean_initialization_latency_ms": report.get("mean_initialization_latency_ms"),
             "mean_control_elapsed_ms": report["mean_control_elapsed_ms"],
             "mean_step_latency_ms": report["mean_step_latency_ms"],
         })
@@ -400,6 +402,7 @@ def compare_benchmarks(left: dict, right: dict) -> dict:
         "success_rate_delta": right.get("success_rate",0)-left.get("success_rate",0),
         "mean_score_delta": right.get("mean_score",0)-left.get("mean_score",0),
         "mean_steps_delta": right.get("mean_steps",0)-left.get("mean_steps",0),
+        "mean_initialization_latency_ms_delta": None if left.get("mean_initialization_latency_ms") is None or right.get("mean_initialization_latency_ms") is None else right["mean_initialization_latency_ms"]-left["mean_initialization_latency_ms"],
         "mean_step_latency_ms_delta": None if left.get("mean_step_latency_ms") is None or right.get("mean_step_latency_ms") is None else right["mean_step_latency_ms"]-left["mean_step_latency_ms"],
         "mean_control_elapsed_ms_delta": None if left.get("mean_control_elapsed_ms") is None or right.get("mean_control_elapsed_ms") is None else right["mean_control_elapsed_ms"]-left["mean_control_elapsed_ms"],
         "left_runs": left.get("runs",0),

@@ -41,7 +41,7 @@ def test_benchmark_slices_keep_events_and_decisions_separate():
 def test_bounded_concurrent_benchmark_is_seed_ordered_and_writes_csv(monkeypatch, tmp_path):
     def fake_run(provider, seed, _base_url):
         record={"run_id":f"run-{seed}","scenario_id":"survival_room","scenario_version":3,"seed":seed,"step":1,"provider":provider.name,"model":None,"chosen_action":{"type":"wait"},"decision_summary":"test","action_valid":True,"latency_ms":0,"token_usage":None,"events":[{"type":"ActionCompleted","message":"wait"}],"observation":{},"agent_context":{},"metrics":{"normalized_score":90+seed%2}}
-        return RemoteRunResult(f"run-{seed}", "escaped", seed % 3 + 1, [record])
+        return RemoteRunResult(f"run-{seed}", "escaped", seed % 3 + 1, [record], initialization_latency_ms=2.5)
     monkeypatch.setattr(benchmark,"run_remote",fake_run)
     class ReplayClient:
         def __init__(self, _base_url): pass
@@ -52,6 +52,8 @@ def test_bounded_concurrent_benchmark_is_seed_ordered_and_writes_csv(monkeypatch
     assert report["concurrency"]==2
     assert [row["seed"] for row in report["seed_results"]]==[10,11,12,13]
     assert report["simulation_steps_per_second"] == 5000.0
+    assert report["mean_initialization_latency_ms"] == 2.5
+    assert all(row["initialization_latency_ms"] == 2.5 for row in report["seed_results"])
     assert (tmp_path/"runs.csv").exists() and (tmp_path/"decisions.csv").exists()
 
 def test_benchmark_comparison_reports_directional_deltas():

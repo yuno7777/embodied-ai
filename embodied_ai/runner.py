@@ -16,6 +16,7 @@ class RemoteRunResult:
     records: list[dict] = field(default_factory=list)
     stop_detail: str | None = None
     world_manifest: dict | None = None
+    initialization_latency_ms: float | None = None
 
 class RustRunClient:
     def __init__(self, base_url: str="http://127.0.0.1:8080", timeout: float=15): self.client=httpx.Client(base_url=base_url, timeout=timeout)
@@ -49,6 +50,7 @@ class RustRunClient:
 def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None, experiment_id: str | None = None, include_research_snapshots: bool = False, policy_state_mode: str = "reset") -> RemoteRunResult:
     context=AgentContext(memory_mode=memory_mode, memory_window=memory_window); client=RustRunClient(base_url)
     run_id: str | None = None
+    initialization_latency_ms: float | None = None
     try:
         if policy_state_mode not in {"reset", "preserve"}:
             raise ValueError("policy_state_mode must be reset or preserve")
@@ -60,9 +62,9 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
         scenario: dict[str, object] | None = None
         world_manifest: dict | None = None
         if restore_replay_id is not None:
-            restored=client.restore(restore_replay_id); run_id=restored["run_id"]; observation=restored["observation"]; steps=restored["snapshot"]["step"]
+            initialization_started=time.perf_counter(); restored=client.restore(restore_replay_id); initialization_latency_ms=(time.perf_counter()-initialization_started)*1000; run_id=restored["run_id"]; observation=restored["observation"]; steps=restored["snapshot"]["step"]
         elif resume_run_id is None:
-            created=client.create(seed, max_steps, observation_mode, scenario_id, generated_world, reward_config); run_id=created["run_id"]; observation=created["observation"]; steps=0
+            initialization_started=time.perf_counter(); created=client.create(seed, max_steps, observation_mode, scenario_id, generated_world, reward_config); initialization_latency_ms=(time.perf_counter()-initialization_started)*1000; run_id=created["run_id"]; observation=created["observation"]; steps=0
             manifest = created.get("world_manifest")
             world_manifest = manifest if isinstance(manifest, dict) else None
             if isinstance(manifest, dict) and isinstance(manifest.get("scenario"), dict):
@@ -71,7 +73,7 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 scenario = client.scenarios()[0]
         else:
             run_id=resume_run_id; status=client.status(run_id); steps=status["step"]
-            if status["done"]: return RemoteRunResult(run_id,status.get("terminal_reason"),steps,[],"run was already terminal")
+            if status["done"]: return RemoteRunResult(run_id,status.get("terminal_reason"),steps,[],"run was already terminal",initialization_latency_ms=initialization_latency_ms)
             observation=client.observation(run_id)
         records=[]; total_tokens=0; started=time.monotonic()
         # Snapshots are deliberately captured into export-only records, never
@@ -83,10 +85,10 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
             while True:
                 if max_wall_seconds is not None and time.monotonic() - started >= max_wall_seconds:
                     client.stop(run_id, "client_timeout")
-                    return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted",world_manifest)
+                    return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted",world_manifest,initialization_latency_ms)
                 status = client.status(run_id)
                 if status["done"]:
-                    return RemoteRunResult(run_id, status.get("terminal_reason"), status["step"], records, world_manifest=world_manifest)
+                    return RemoteRunResult(run_id, status.get("terminal_reason"), status["step"], records, world_manifest=world_manifest, initialization_latency_ms=initialization_latency_ms)
                 if status["paused"]:
                     time.sleep(0.1)
                     continue
@@ -100,28 +102,28 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                     provider_latency_ms=0; decision_summary="provider action submitted to Rust authority"; agent_metadata=None
                 if max_wall_seconds is not None and time.monotonic() - started >= max_wall_seconds:
                     client.stop(run_id, "client_timeout")
-                    return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted during provider decision",world_manifest)
+                    return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted during provider decision",world_manifest,initialization_latency_ms)
                 token_usage = getattr(provider, "last_token_usage", None)
                 decision_tokens = (token_usage or {}).get("total_tokens", 0)
                 if max_total_tokens is not None and total_tokens + decision_tokens > max_total_tokens:
                     client.stop(run_id, "token_budget_exhausted")
-                    return RemoteRunResult(run_id,"token_budget_exhausted",steps,records,f"token budget {max_total_tokens} exceeded",world_manifest)
+                    return RemoteRunResult(run_id,"token_budget_exhausted",steps,records,f"token budget {max_total_tokens} exceeded",world_manifest,initialization_latency_ms)
                 total_tokens += decision_tokens
                 client.record_decision(run_id, action, decision_summary, provider.name, getattr(provider, "model", None), provider_latency_ms, token_usage, agent_metadata)
                 step_started=time.perf_counter(); result=client.step(run_id,action); step_latency_ms=(time.perf_counter()-step_started)*1000; steps=result["step_number"]
                 if scenario is None:
                     scenario = client.scenarios()[0]
                 next_research_snapshot = client.snapshot(run_id) if include_research_snapshots else None
-                records.append({"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"observation_mode":observation_mode,"policy_state_mode":policy_state_mode,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"agent_metadata":agent_metadata,"events":result["events"],"reward":result["reward"],"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
+                records.append({"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"observation_mode":observation_mode,"policy_state_mode":policy_state_mode,"initialization_latency_ms":initialization_latency_ms,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"agent_metadata":agent_metadata,"events":result["events"],"reward":result["reward"],"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
                 if include_research_snapshots:
                     records[-1]["research_snapshot"] = research_snapshot
                     records[-1]["next_research_snapshot"] = next_research_snapshot
                 records[-1]["provider_backoff_ms"] = list(getattr(provider, "last_backoff_ms", []))
                 context.record(observation,action.model_dump(exclude_none=True),result["events"]); observation=result["observation"]; research_snapshot = next_research_snapshot
-                if result["done"]: return RemoteRunResult(run_id,result["terminal_reason"],steps,records,world_manifest=world_manifest)
+                if result["done"]: return RemoteRunResult(run_id,result["terminal_reason"],steps,records,world_manifest=world_manifest,initialization_latency_ms=initialization_latency_ms)
         except Exception:
             if run_id is None:
                 raise
             client.provider_error(run_id)
-            return RemoteRunResult(run_id,"provider_error",steps,records,world_manifest=world_manifest)
+            return RemoteRunResult(run_id,"provider_error",steps,records,world_manifest=world_manifest,initialization_latency_ms=initialization_latency_ms)
     finally: client.close()
