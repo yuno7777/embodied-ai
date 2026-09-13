@@ -92,7 +92,7 @@ python -m embodied_ai.cli run --generated-world-seed 42 --provider random_valid 
 python -m embodied_ai.cli run --generated-world-seed 42 --generator-config configs/generator/compact-v1.json --provider random_valid --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli benchmark --scenario survival_room --provider scripted --runs 20 --seed-start 1000 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli benchmark-scale --provider random_valid --runs 64 --workers 1,8,32,64 --server-url http://127.0.0.1:8080
-python -m embodied_ai.cli generalize --provider scripted --train-start 0 --train-count 20 --validation-start 1000 --validation-count 10 --test-start 2000 --test-count 10 --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli generalize --provider scripted --train-start 0 --train-count 20 --validation-start 8000 --validation-count 10 --test-start 9000 --test-count 10 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli train-tabular --episodes 100 --checkpoint data/checkpoints/tabular_q.json --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli evaluate-tabular --checkpoint data/checkpoints/tabular_q.json --seed-start 9000 --episodes 20 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider gemini --max-wall-seconds 300 --max-total-tokens 20000 --server-url http://127.0.0.1:8080
@@ -102,7 +102,7 @@ python -m embodied_ai.cli run --provider cautious --restore-replay-id YOUR_PERSI
 
 Start the Rust server before either command. Rust events are persisted as replayable JSONL plus a structured replay record (including initial and per-step researcher snapshots and the exact filtered observations supplied to the agent) under `data/runs/`; the observer library loads those saved replays after a server restart and supports step/playback controls. The Python run and benchmark commands also export step-level Rust observations, decisions, events and metrics as JSONL/Parquet.
 
-`generalize` creates only procedural worlds, keeps its three seed sets disjoint, and writes `generalization_report.json` plus per-episode JSONL. Its report includes each split's success rate with a Wilson 95% interval, reward, episode length, invalid-action rate, exploration/resource metrics, failure reasons, steps/sec, and train-to-held-out gaps. It evaluates policies; it does not train them.
+`generalize` creates only procedural worlds, keeps its three seed sets disjoint, and writes `generalization_report.json` plus per-episode JSONL. Its defaults match Rust's declared train (`0..7999`), validation (`8000..8999`), and test (`9000..9999`) partitions; explicit ranges remain available for a separately documented experimental split. Its report includes each split's success rate with a Wilson 95% interval, reward, episode length, invalid-action rate, exploration/resource metrics, failure reasons, steps/sec, and train-to-held-out gaps. It evaluates policies; it does not train them.
 
 Benchmark summaries report control wall-clock measurements separately from `simulation_steps_per_second`, which is derived from the Rust server's authoritative per-step simulation timings. Provider/model latency is therefore not presented as simulator throughput.
 
