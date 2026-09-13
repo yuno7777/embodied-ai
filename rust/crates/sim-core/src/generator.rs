@@ -173,17 +173,24 @@ impl WorldGenerator {
         let width = rng.random_range(self.config.min_width..=self.config.max_width);
         let height = rng.random_range(self.config.min_height..=self.config.max_height);
         let middle_y = rng.random_range(1..height - 1);
-        // A divider creates two independently useful rooms joined by one deterministic corridor.
-        // It keeps generation compact while preventing a generated world from degenerating into
-        // an unrestricted open grid.
-        let divider_x = width / 2;
-        let key_in_right_room = rng.random_bool(0.5);
+        // Choose a compact room graph instead of a single fixed layout. Every
+        // divider has one corridor, keeping topology varied but solvable.
+        let divider_xs = if rng.random_bool(0.5) {
+            vec![width / 2]
+        } else {
+            vec![width / 3, width * 2 / 3]
+        };
+        let mut room_spans = vec![];
+        let mut room_start = 1;
+        for divider_x in &divider_xs {
+            room_spans.push((room_start, *divider_x - 1));
+            room_start = *divider_x + 1;
+        }
+        room_spans.push((room_start, width - 2));
+        let key_room = rng.random_range(0..room_spans.len());
+        let (key_min_x, key_max_x) = room_spans[key_room];
         let key_position = Pos {
-            x: if key_in_right_room {
-                rng.random_range(divider_x + 1..width - 1)
-            } else {
-                rng.random_range(1..divider_x)
-            },
+            x: rng.random_range(key_min_x..=key_max_x),
             y: rng.random_range(1..height - 1),
         };
         let hazard_position = loop {
@@ -191,7 +198,10 @@ impl WorldGenerator {
                 x: rng.random_range(1..width - 1),
                 y: rng.random_range(1..height - 1),
             };
-            if position != key_position && position.y != middle_y && position.x != divider_x {
+            if position != key_position
+                && position.y != middle_y
+                && !divider_xs.contains(&position.x)
+            {
                 break position;
             }
         };
@@ -205,12 +215,65 @@ impl WorldGenerator {
             y: middle_y,
         };
         let mut walls = border_walls(width, height);
-        walls.extend(
-            (1..height - 1)
-                .filter(|y| *y != middle_y)
-                .map(|y| Pos { x: divider_x, y }),
-        );
+        for divider_x in &divider_xs {
+            walls.extend(
+                (1..height - 1)
+                    .filter(|y| *y != middle_y)
+                    .map(|y| Pos { x: *divider_x, y }),
+            );
+        }
         walls.sort();
+        let mut doors = divider_xs
+            .iter()
+            .enumerate()
+            .map(|(index, divider_x)| Door {
+                id: if index == 0 {
+                    "corridor_door".into()
+                } else {
+                    format!("corridor_door_{}", index + 1)
+                },
+                position: Pos {
+                    x: *divider_x,
+                    y: middle_y,
+                },
+                locked: false,
+                open: true,
+                key_id: None,
+                is_exit: false,
+            })
+            .collect::<Vec<_>>();
+        doors.push(Door {
+            id: "exit".into(),
+            position: exit,
+            locked: true,
+            open: false,
+            key_id: Some("exit_key".into()),
+            is_exit: true,
+        });
+        let room_labels = ["Left", "Middle", "Right"];
+        let rooms = room_spans
+            .iter()
+            .enumerate()
+            .map(|(index, (min_x, max_x))| Room {
+                id: format!("generated_{}_room", room_labels[index].to_lowercase()),
+                name: format!("Generated {} Room", room_labels[index]),
+                min: Pos { x: *min_x, y: 1 },
+                max: Pos {
+                    x: *max_x,
+                    y: height - 2,
+                },
+            })
+            .collect::<Vec<_>>();
+        let mut key_to_exit = vec![spawn, key_position];
+        key_to_exit.extend(divider_xs.iter().map(|divider_x| Pos {
+            x: *divider_x,
+            y: middle_y,
+        }));
+        key_to_exit.push(Pos {
+            x: width - 2,
+            y: middle_y,
+        });
+        key_to_exit.push(exit);
         Scenario {
             id: format!("generated_grid_v1_{seed}_{attempt}"),
             name: format!("Generated Grid {seed}"),
@@ -251,27 +314,7 @@ impl WorldGenerator {
                     cures_status_effects: vec![],
                 },
             ],
-            doors: vec![
-                Door {
-                    id: "corridor_door".into(),
-                    position: Pos {
-                        x: divider_x,
-                        y: middle_y,
-                    },
-                    locked: false,
-                    open: true,
-                    key_id: None,
-                    is_exit: false,
-                },
-                Door {
-                    id: "exit".into(),
-                    position: exit,
-                    locked: true,
-                    open: false,
-                    key_id: Some("exit_key".into()),
-                    is_exit: true,
-                },
-            ],
+            doors,
             hazards: vec![Hazard {
                 id: "hazard".into(),
                 position: hazard_position,
@@ -314,40 +357,10 @@ impl WorldGenerator {
                 destination: None,
                 probability_per_mille: 1000,
             }],
-            rooms: vec![
-                Room {
-                    id: "generated_left_room".into(),
-                    name: "Generated Left Room".into(),
-                    min: Pos { x: 1, y: 1 },
-                    max: Pos {
-                        x: divider_x - 1,
-                        y: height - 2,
-                    },
-                },
-                Room {
-                    id: "generated_right_room".into(),
-                    name: "Generated Right Room".into(),
-                    min: Pos {
-                        x: divider_x + 1,
-                        y: 1,
-                    },
-                    max: Pos {
-                        x: width - 2,
-                        y: height - 2,
-                    },
-                },
-            ],
+            rooms,
             routes: vec![Route {
                 id: "key_to_exit".into(),
-                waypoints: vec![
-                    spawn,
-                    key_position,
-                    Pos {
-                        x: width - 2,
-                        y: middle_y,
-                    },
-                    exit,
-                ],
+                waypoints: key_to_exit,
             }],
         }
     }
@@ -479,21 +492,19 @@ mod tests {
             .generate(42)
             .unwrap();
         let scenario = &world.scenario;
-        let divider_x = scenario.width / 2;
-        assert_eq!(scenario.rooms.len(), 2);
-        assert!(
-            scenario
-                .walls
-                .iter()
-                .any(|wall| wall.x == divider_x && wall.y > 0 && wall.y < scenario.height - 1)
-        );
-        let corridor = scenario
+        assert!(matches!(scenario.rooms.len(), 2 | 3));
+        let corridors = scenario
             .doors
             .iter()
-            .find(|door| door.id == "corridor_door")
-            .unwrap();
-        assert_eq!(corridor.position.x, divider_x);
-        assert!(corridor.open && !corridor.locked);
+            .filter(|door| !door.is_exit)
+            .collect::<Vec<_>>();
+        assert_eq!(corridors.len(), scenario.rooms.len() - 1);
+        for corridor in corridors {
+            assert!(corridor.open && !corridor.locked);
+            assert!(scenario.walls.iter().any(|wall| {
+                wall.x == corridor.position.x && wall.y > 0 && wall.y < scenario.height - 1
+            }));
+        }
         assert!(reachable(
             scenario,
             scenario.spawn,
@@ -505,6 +516,15 @@ mod tests {
             [Perturbation { id, target_id, effect: PerturbationEffect::DeactivateHazard, probability_per_mille: 1000, .. }]
                 if id == "hazard_cooldown" && target_id == "hazard"
         ));
+    }
+
+    #[test]
+    fn generated_worlds_vary_their_room_graph_topology() {
+        let generator = WorldGenerator::new(WorldGeneratorConfig::default()).unwrap();
+        let room_counts = (0..64)
+            .map(|seed| generator.generate(seed).unwrap().scenario.rooms.len())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(room_counts, BTreeSet::from([2, 3]));
     }
 
     #[test]
