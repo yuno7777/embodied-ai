@@ -45,3 +45,19 @@ def test_run_cli_forwards_a_generator_config_file(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["embodied-ai", "run", "--generated-world-seed", "99", "--generator-config", str(config), "--server-url", "http://sim", "--output", str(tmp_path)])
     cli.main()
     assert captured["generated_world"] == {"seed": 99, "config": {"min_width": 9, "max_width": 9}}
+
+
+def test_generalize_cli_defaults_match_authoritative_seed_partitions(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(
+        cli,
+        "evaluate_generalization_remote",
+        lambda plan, *_args: (captured.update(plan.as_dict()) or {"ok": True}),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["embodied-ai", "generalize", "--server-url", "http://sim", "--output", str(tmp_path)],
+    )
+    cli.main()
+    assert captured == {"train": [0, 1, 2, 3, 4], "validation": [8000, 8001], "test": [9000, 9001]}
