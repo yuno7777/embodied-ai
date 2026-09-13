@@ -93,3 +93,13 @@ def test_experiment_audit_binds_a_pinned_reward_profile_to_trajectory_rows(tmp_p
     record["reward_config"] = {**rewards, "terminal_success": 1}
     with pytest.raises(ValueError, match="reward_config"):
         audit_experiment_manifest(path, [record])
+
+
+def test_experiment_audit_revalidates_versioned_trajectory_rows(tmp_path):
+    manifest = ExperimentManifest(
+        experiment_id="experiment", scenario_id="survival_room", seed=9, provider="scripted",
+        observation_mode="normal", memory_mode="none", memory_window=1,
+    )
+    path = manifest.persist(tmp_path)
+    with pytest.raises(ValueError):
+        audit_experiment_manifest(path, [{"trajectory_schema_version": 1, "experiment_id": "experiment"}])
