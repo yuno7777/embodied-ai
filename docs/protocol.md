@@ -24,6 +24,8 @@ Each state-changing server endpoint persists its event log and replay before ret
 
 Before the runner submits a model action, it records `POST /api/runs/{id}/decision` with the strictly validated action, concise decision summary, provider/model identity, measured provider latency, and optional SDK token usage. A decision may additionally carry bounded operational `agent_metadata`: confidence in `[0, 1]`, a finite value estimate, non-negative policy entropy, and concise planner telemetry (name, expanded-node count, and planning time). It never accepts free-form reasoning, hidden state, or a world mutation request. The server broadcasts an `agent_decision` message and persists the record in the replay; it remains non-authoritative until the normal step endpoint validates and executes the action.
 
+Custom synchronous policies may implement `decide(observation) -> AgentDecision`; `CallablePolicy` supports either that complete result or an action-only result. This is equivalent to the asynchronous provider decision boundary after validation, and it remains limited to the same filtered observation and Rust action endpoint.
+
 `GET /api/runs/{id}/status` exposes only orchestration control state (`paused`, `done`, terminal reason, and step). Provider workers check it before every model request, so a paused run waits without consuming another provider turn and an aborted run exits cleanly.
 
 Python trajectory exports record `agent_context` beside each observation. It is the compact context payload supplied to the provider immediately before that decision, never an authoritative snapshot or hidden-state projection.
