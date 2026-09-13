@@ -371,9 +371,21 @@ def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) 
     metrics = ("success_rate", "mean_episode_reward", "mean_episode_length", "invalid_action_rate", "mean_exploration_coverage", "mean_resource_efficiency", "steps_per_second")
     def delta(left_value: Any, right_value: Any) -> float | None:
         return right_value - left_value if isinstance(left_value, (int, float)) and isinstance(right_value, (int, float)) else None
+    def hazard_deltas(name: str) -> dict[str, dict[str, float | None]]:
+        left_hazards = left_partitions[name].get("hazard_kind_breakdown", {})
+        right_hazards = right_partitions[name].get("hazard_kind_breakdown", {})
+        if not isinstance(left_hazards, dict) or not isinstance(right_hazards, dict):
+            return {}
+        return {
+            kind: {
+                "episodes_delta": delta(left_hazards.get(kind, {}).get("episodes"), right_hazards.get(kind, {}).get("episodes")),
+                "success_rate_delta": delta(left_hazards.get(kind, {}).get("success_rate"), right_hazards.get(kind, {}).get("success_rate")),
+            }
+            for kind in sorted(set(left_hazards) | set(right_hazards))
+        }
     return {
         "engine_version": left.get("engine_version"), "observation_mode": left.get("observation_mode"),
         "left_experiment_id": left.get("experiment_id"), "right_experiment_id": right.get("experiment_id"),
-        "partitions": {name: {f"{metric}_delta": delta(left_partitions[name].get(metric), right_partitions[name].get(metric)) for metric in metrics} for name in sorted(expected)},
+        "partitions": {name: {**{f"{metric}_delta": delta(left_partitions[name].get(metric), right_partitions[name].get(metric)) for metric in metrics}, "hazard_kind_breakdown": hazard_deltas(name)} for name in sorted(expected)},
         "generalization_gap": {key + "_delta": delta(left.get("generalization_gap", {}).get(key), right.get("generalization_gap", {}).get(key)) for key in ("train_minus_validation_success_rate", "train_minus_test_success_rate")},
     }
