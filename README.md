@@ -108,6 +108,8 @@ python -m embodied_ai.cli train-tabular --episodes 100 --checkpoint data/checkpo
 python -m embodied_ai.cli evaluate-tabular --checkpoint data/checkpoints/tabular_q.json --seed-start 9000 --episodes 20 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli train-tabular --observation-mode noisy --episodes 100 --checkpoint data/checkpoints/tabular_q_noisy.json --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli evaluate-tabular --observation-mode noisy --checkpoint data/checkpoints/tabular_q_noisy.json --seed-start 9000 --episodes 20 --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli train-tabular --generator-config configs/generator/two-room-v1.json --checkpoint data/checkpoints/tabular_q_two_room.json --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli evaluate-tabular --generator-config configs/generator/three-room-v1.json --checkpoint data/checkpoints/tabular_q_two_room.json --seed-start 9000 --episodes 20 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider gemini --max-wall-seconds 300 --max-total-tokens 20000 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider cautious --observation-mode noisy --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --provider cautious --resume-run-id YOUR_LIVE_RUN_ID --server-url http://127.0.0.1:8080
@@ -122,7 +124,7 @@ Benchmark summaries report control wall-clock measurements separately from `simu
 
 `scripted`, `mock_reasoning`, and `random_valid` require no API key. The Gemini adapter uses the official `google-genai` SDK, structured JSON output, timeouts and post-response Pydantic validation; it is intentionally opt-in.
 
-`train-tabular` is a small infrastructure-validation RL baseline. It learns a tabular Q-function from the selected public observation mode, submits every action to Rust, and saves a reloadable JSON checkpoint. Use matching `--observation-mode` values for straightforward train/test comparisons; intentionally different modes are a perception-shift experiment and should be labeled as such. It is intentionally not a claim of competitive agent performance.
+`train-tabular` is a small infrastructure-validation RL baseline. It learns a tabular Q-function from the selected public observation mode, submits every action to Rust, and saves a reloadable JSON checkpoint. Train and evaluation each persist an immutable experiment manifest beside that checkpoint, recording the observation mode, procedural generator config, seed start, episode count, and tabular hyperparameters where applicable. Use matching `--observation-mode` and `--generator-config` values for straightforward train/test comparisons; intentionally different values are perception/layout-shift experiments and should be labeled as such. It is intentionally not a claim of competitive agent performance.
 
 If an in-run provider call exhausts its retries, the runner marks the authoritative run as `provider_error`, persists the partial replay, and returns a clean terminal result instead of leaving an active run behind.
 
