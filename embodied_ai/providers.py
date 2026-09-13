@@ -1,7 +1,8 @@
 """Provider boundary: a model can choose an action, never mutate an environment."""
 from __future__ import annotations
 import asyncio, json, os, time
-from typing import Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 from .context import AgentContext, SYSTEM_PROMPT
 from .schemas import AgentDecision, ActionRequest
@@ -15,6 +16,23 @@ class Policy(Protocol):
 class AgentProvider(Policy, Protocol):
     """Compatibility name for policies used by the existing runner."""
     def choose_action(self, observation: dict) -> ActionRequest: ...
+
+
+class CallablePolicy:
+    """Adapter for custom public-observation policies without simulation access."""
+
+    def __init__(self, name: str, action_fn: Callable[[dict[str, Any]], ActionRequest | dict[str, Any]], reset_fn: Callable[[int | None], None] | None = None):
+        if not name:
+            raise ValueError("policy name must be non-empty")
+        self.name, self._action_fn, self._reset_fn = name, action_fn, reset_fn
+
+    def reset(self, seed: int | None = None) -> None:
+        if self._reset_fn is not None:
+            self._reset_fn(seed)
+
+    def act(self, observation: dict[str, Any]) -> ActionRequest:
+        action = self._action_fn(observation)
+        return action if isinstance(action, ActionRequest) else ActionRequest.model_validate(action)
 
 class ScriptedProvider:
     name = "scripted"

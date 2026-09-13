@@ -3,7 +3,7 @@ import pytest
 from pathlib import Path
 from embodied_ai.context import AgentContext, SYSTEM_PROMPT
 from embodied_ai.datasets import export_jsonl, export_parquet
-from embodied_ai.providers import CautiousProvider, ExplorerProvider, RandomValidProvider
+from embodied_ai.providers import CallablePolicy, CautiousProvider, ExplorerProvider, RandomValidProvider
 from embodied_ai.schemas import AgentDecision
 
 def test_schema_rejects_unknown_action_fields():
@@ -37,6 +37,20 @@ def test_exports_are_written_without_a_second_python_simulator(tmp_path: Path):
 def test_random_provider_returns_allowed_action():
     action=RandomValidProvider(7).choose_action({})
     assert action.type=="move" and action.direction in {"north","south","east","west"}
+
+
+def test_callable_policy_keeps_custom_agents_on_the_typed_public_action_boundary():
+    resets = []
+    policy = CallablePolicy("custom", lambda observation: {"type": "wait"} if observation == {"public": True} else {}, resets.append)
+    policy.reset(7)
+    assert policy.act({"public": True}).model_dump(exclude_none=True) == {"type": "wait"}
+    assert resets == [7]
+    try:
+        policy.act({"public": False})
+    except Exception:
+        pass
+    else:
+        raise AssertionError("custom policies bypassed typed action validation")
 
 def test_baseline_policy_lifecycle_resets_deterministically():
     explorer=ExplorerProvider()
