@@ -274,6 +274,16 @@ struct Replay {
     control: ControlStats,
 }
 
+struct PersistenceInput<'a> {
+    env: &'a Environment,
+    world_manifest: Option<&'a WorldManifest>,
+    timeline: &'a [WorldSnapshot],
+    observations: &'a [Observation],
+    decisions: &'a [DecisionRecord],
+    actions: &'a [Action],
+    control: ControlStats,
+}
+
 #[derive(Serialize)]
 struct BenchmarkSummary {
     total_runs: usize,
@@ -371,34 +381,61 @@ fn persist(
     decisions: &[DecisionRecord],
     actions: &[Action],
     control: ControlStats,
-) {
+) -> Result<(), String> {
     let directory = std::path::Path::new("../data/runs");
-    let _ = std::fs::create_dir_all(directory);
-    let records = env
+    persist_to(
+        directory,
+        PersistenceInput {
+            env,
+            world_manifest,
+            timeline,
+            observations,
+            decisions,
+            actions,
+            control,
+        },
+    )
+}
+fn persist_to(directory: &FsPath, input: PersistenceInput<'_>) -> Result<(), String> {
+    std::fs::create_dir_all(directory)
+        .map_err(|error| format!("cannot create replay directory: {error}"))?;
+    let records = input
+        .env
         .events
         .iter()
-        .filter_map(|event| serde_json::to_string(event).ok())
-        .collect::<Vec<_>>()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("cannot serialize event log: {error}"))?
         .join("\n");
-    let _ = std::fs::write(
-        directory.join(format!("{}.jsonl", env.run_id)),
+    std::fs::write(
+        directory.join(format!("{}.jsonl", input.env.run_id)),
         format!("{records}\n"),
-    );
+    )
+    .map_err(|error| format!("cannot write event log: {error}"))?;
     let replay = replay_for(
-        env,
-        world_manifest,
-        timeline,
-        observations,
-        decisions,
-        actions,
-        control,
+        input.env,
+        input.world_manifest,
+        input.timeline,
+        input.observations,
+        input.decisions,
+        input.actions,
+        input.control,
     );
-    if let Ok(encoded) = serde_json::to_vec_pretty(&replay) {
-        let _ = std::fs::write(
-            directory.join(format!("{}.replay.json", env.run_id)),
-            encoded,
-        );
-    }
+    let encoded = serde_json::to_vec_pretty(&replay)
+        .map_err(|error| format!("cannot serialize replay: {error}"))?;
+    std::fs::write(
+        directory.join(format!("{}.replay.json", input.env.run_id)),
+        encoded,
+    )
+    .map_err(|error| format!("cannot write replay: {error}"))?;
+    Ok(())
+}
+fn persistence_error(error: String) -> (StatusCode, String) {
+    tracing::error!(%error, "replay persistence failed");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "replay persistence failed".into(),
+    )
 }
 fn saved_replay(id: Uuid) -> Option<Replay> {
     let path = std::path::Path::new("../data/runs").join(format!("{id}.replay.json"));
@@ -891,7 +928,8 @@ async fn abort(
         &run.decisions,
         &run.actions,
         run.control_snapshot(),
-    );
+    )
+    .map_err(|error| persistence_error(error).0)?;
     let _ = state.updates.send((
         id,
         serde_json::json!({"type":"run_completed","snapshot":snapshot.clone()}).to_string(),
@@ -923,7 +961,8 @@ async fn provider_error(
         &run.decisions,
         &run.actions,
         run.control_snapshot(),
-    );
+    )
+    .map_err(|error| persistence_error(error).0)?;
     let _ = state.updates.send((
         id,
         serde_json::json!({"type":"run_completed","snapshot":snapshot.clone()}).to_string(),
@@ -963,7 +1002,8 @@ async fn stop_run(
         &run.decisions,
         &run.actions,
         run.control_snapshot(),
-    );
+    )
+    .map_err(|error| persistence_error(error).0)?;
     let _ = state.updates.send((
         id,
         serde_json::json!({"type":"run_completed","snapshot":snapshot.clone()}).to_string(),
@@ -1017,7 +1057,8 @@ async fn record_decision(
         &run.decisions,
         &run.actions,
         run.control_snapshot(),
-    );
+    )
+    .map_err(persistence_error)?;
     let _ = state.updates.send((
         id,
         serde_json::json!({"type":"agent_decision","decision":decision}).to_string(),
@@ -1057,7 +1098,8 @@ async fn step(
         &run.decisions,
         &run.actions,
         run.control_snapshot(),
-    );
+    )
+    .map_err(|error| persistence_error(error).0)?;
     let _ = state.updates.send((
         id,
         serde_json::json!({"type":"simulation_event","result":result,"snapshot":run.env.snapshot()}).to_string(),
@@ -1095,7 +1137,8 @@ async fn manual_step(
         &run.decisions,
         &run.actions,
         run.control_snapshot(),
-    );
+    )
+    .map_err(|error| persistence_error(error).0)?;
     let _ = state.updates.send((
         id,
         serde_json::json!({"type":"manual_simulation_event","result":result,"snapshot":run.env.snapshot()}).to_string(),
@@ -1221,6 +1264,28 @@ mod tests {
     use axum::{body::Body, http::Request};
     use sim_core::Direction;
     use tower::ServiceExt;
+
+    #[test]
+    fn persistence_reports_an_unusable_replay_directory() {
+        let env = Environment::new(bundled_scenario(), 1).unwrap();
+        let path = std::env::temp_dir().join(format!("sim-server-persist-{}", Uuid::new_v4()));
+        std::fs::write(&path, "not a directory").unwrap();
+        let error = persist_to(
+            &path,
+            PersistenceInput {
+                env: &env,
+                world_manifest: None,
+                timeline: &[],
+                observations: &[],
+                decisions: &[],
+                actions: &[],
+                control: ControlStats::default(),
+            },
+        )
+        .unwrap_err();
+        std::fs::remove_file(path).unwrap();
+        assert!(error.contains("cannot create replay directory"));
+    }
 
     #[test]
     fn committed_schema_vocabulary_matches_rust_action_boundary() {
