@@ -105,6 +105,7 @@ python -m embodied_ai.cli generalize --provider scripted --train-start 0 --train
 python -m embodied_ai.cli generalize --provider cautious --train-generator-config configs/generator/two-room-v1.json --validation-generator-config configs/generator/three-room-v1.json --test-generator-config configs/generator/three-room-v1.json --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli generalize --provider cautious --observation-mode noisy --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli audit-generalization --report data/exports/generalization/generalization_report.json
+python -m embodied_ai.cli audit-dataset --trajectory data/runs/YOUR_RUN.jsonl
 python -m embodied_ai.cli compare-generalization --left data/exports/experiment-a/generalization_report.json --right data/exports/experiment-b/generalization_report.json
 python -m embodied_ai.cli train-tabular --episodes 100 --checkpoint data/checkpoints/tabular_q.json --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli evaluate-tabular --checkpoint data/checkpoints/tabular_q.json --seed-start 9000 --episodes 20 --server-url http://127.0.0.1:8080

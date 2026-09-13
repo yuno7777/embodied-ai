@@ -32,4 +32,4 @@ Policy-local state is explicitly separate from that runner-owned context. `run_r
 
 For offline world-model research, the headless CLI may be invoked with `--include-research-snapshots`. That explicit local opt-in records a before/after `WorldSnapshot` pair beside each transition as `research_snapshot` and `next_research_snapshot`; it does not alter either the observation or provider context. Dataset conversion excludes the privileged pair unless its caller explicitly requests privileged state.
 
-`embodied-ai audit-dataset --trajectory <run.jsonl>` provides a local coverage report for exported transitions, action/outcome mix, sensor modes, exact next-observation availability, and complete versus partial privileged snapshot pairs.
+`embodied-ai audit-dataset --trajectory <run.jsonl>` provides a local coverage report for exported transitions, action/outcome mix, sensor modes, policy-state lifecycle modes, metadata-field presence, exact next-observation availability, and complete versus partial privileged snapshot pairs. It reports metadata coverage only, never metadata values or privileged snapshots.
