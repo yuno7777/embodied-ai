@@ -280,6 +280,64 @@ class AgentDecision(BaseModel):
     decision_summary: str = Field(default="", max_length=500)
     agent_metadata: AgentMetadata | None = None
 
+
+class TrajectoryStep(BaseModel):
+    """Versioned, analysis-ready record of one authoritative policy transition."""
+    model_config = ConfigDict(extra="forbid")
+    trajectory_schema_version: Literal[1]
+    dataset_schema_version: Literal[DATASET_SCHEMA_VERSION]
+    experiment_id: str | None = None
+    world_manifest: WorldManifest | None = None
+    reward_config: RewardConfig | None = None
+    run_id: str = Field(min_length=1)
+    scenario_id: str = Field(min_length=1)
+    scenario_version: int = Field(ge=0)
+    seed: int = Field(ge=0)
+    step: int = Field(ge=1)
+    simulation_time: int = Field(ge=0)
+    observation_mode: Literal["minimal", "normal", "rich", "oracle", "noisy"]
+    policy_state_mode: Literal["reset", "preserve"]
+    initialization_latency_ms: float | None = Field(default=None, ge=0)
+    observation: Observation
+    next_observation: Observation
+    agent_context: dict[str, object]
+    allowed_actions: list[ActionType]
+    chosen_action: ActionRequest
+    action_valid: bool
+    decision_summary: str = Field(max_length=500)
+    agent_metadata: AgentMetadata | None = None
+    events: list[Event]
+    reward: int
+    reward_breakdown: RewardBreakdown
+    done: bool
+    terminal_reason: str | None = None
+    metrics: Metrics
+    provider: str = Field(min_length=1)
+    model: str | None = None
+    latency_ms: float = Field(ge=0)
+    step_latency_ms: float = Field(ge=0)
+    token_usage: dict[str, object] | None = None
+    provider_attempts: int = Field(ge=1)
+    cumulative_tokens: int = Field(ge=0)
+    control_elapsed_ms: float = Field(ge=0)
+    provider_backoff_ms: list[float] = Field(default_factory=list)
+    research_snapshot: dict[str, object] | None = None
+    next_research_snapshot: dict[str, object] | None = None
+
+    @model_validator(mode="after")
+    def validate_transition(self) -> "TrajectoryStep":
+        if self.done != (self.terminal_reason is not None):
+            raise ValueError("terminal_reason must be present exactly when done")
+        if self.observation.run_id != self.run_id or self.next_observation.run_id != self.run_id:
+            raise ValueError("trajectory observations must belong to the recorded run")
+        if self.observation.step != self.step - 1 or self.next_observation.step != self.step:
+            raise ValueError("trajectory observation steps must bracket the recorded transition")
+        if self.allowed_actions != self.observation.allowed_action_types:
+            raise ValueError("allowed_actions must match the policy observation")
+        if (self.research_snapshot is None) != (self.next_research_snapshot is None):
+            raise ValueError("research snapshots must be recorded as a before/after pair")
+        return self
+
 class RunMetadata(BaseModel):
     protocol_version: int = PROTOCOL_VERSION
     dataset_schema_version: int = DATASET_SCHEMA_VERSION

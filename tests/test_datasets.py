@@ -1,4 +1,6 @@
-from embodied_ai.datasets import summarize_world_model_dataset, world_model_transitions
+import pytest
+
+from embodied_ai.datasets import export_jsonl, summarize_world_model_dataset, world_model_transitions
 
 
 def test_world_model_transitions_preserve_episode_boundaries_and_policy_observations():
@@ -64,3 +66,8 @@ def test_dataset_summary_flags_mixed_policy_state_modes_within_one_run():
         {"run_id": "a", "step": 2, "policy_state_mode": "preserve", "observation": {}, "chosen_action": {"type": "wait"}},
     ])
     assert report["runs_with_mixed_policy_state_mode"] == 1
+
+
+def test_jsonl_export_rejects_incomplete_versioned_trajectory_steps(tmp_path):
+    with pytest.raises(ValueError):
+        export_jsonl([{"trajectory_schema_version": 1}], tmp_path / "trajectory.jsonl")

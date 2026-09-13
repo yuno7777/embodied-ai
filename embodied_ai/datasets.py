@@ -4,8 +4,14 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 import pandas as pd
+from .schemas import TrajectoryStep
 
 def export_jsonl(records: list[dict[str, Any]], path: Path) -> Path:
+    records = [
+        TrajectoryStep.model_validate(record).model_dump(mode="json")
+        if record.get("trajectory_schema_version") == 1 else record
+        for record in records
+    ]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(json.dumps(row, default=str) for row in records) + ("\n" if records else ""), encoding="utf-8")
     return path
