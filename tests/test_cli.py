@@ -109,27 +109,34 @@ def test_generalize_cli_forwards_a_nondefault_observation_mode(monkeypatch, tmp_
 
 def test_tabular_cli_forwards_sensor_mode_to_the_authoritative_environment(monkeypatch, tmp_path):
     captured = {}
-    def fake_train(factory, _policy, _seeds, _max_steps, _options):
+    def fake_train(factory, _policy, _seeds, _max_steps, options):
         captured["train"] = factory().config.observation_mode
+        captured["train_world"] = options(5)["generated_world"]
         return [{"total_reward": 1, "terminal_reason": "escaped"}]
     monkeypatch.setattr(cli, "train_tabular_q", fake_train)
     checkpoint = tmp_path / "tabular.json"
     monkeypatch.setattr(
         sys,
         "argv",
-        ["embodied-ai", "train-tabular", "--observation-mode", "noisy", "--checkpoint", str(checkpoint), "--server-url", "http://sim"],
+        ["embodied-ai", "train-tabular", "--observation-mode", "noisy", "--generator-config", str(tmp_path / "config.json"), "--checkpoint", str(checkpoint), "--server-url", "http://sim"],
     )
+    (tmp_path / "config.json").write_text('{"min_rooms": 2, "max_rooms": 2}')
     cli.main()
     assert captured["train"] == "noisy"
+    assert captured["train_world"] == {"seed": 5, "config": {"min_rooms": 2, "max_rooms": 2}}
+    assert len(list(tmp_path.glob("*.experiment.json"))) == 1
 
-    def fake_evaluate(factory, _policy, _seeds, _max_steps, _options):
+    def fake_evaluate(factory, _policy, _seeds, _max_steps, options):
         captured["evaluate"] = factory().config.observation_mode
+        captured["evaluate_world"] = options(9000)["generated_world"]
         return [{"total_reward": 1, "terminal_reason": "escaped"}]
     monkeypatch.setattr(cli, "evaluate_tabular_q", fake_evaluate)
     monkeypatch.setattr(
         sys,
         "argv",
-        ["embodied-ai", "evaluate-tabular", "--observation-mode", "noisy", "--checkpoint", str(checkpoint), "--server-url", "http://sim"],
+        ["embodied-ai", "evaluate-tabular", "--observation-mode", "noisy", "--generator-config", str(tmp_path / "config.json"), "--checkpoint", str(checkpoint), "--server-url", "http://sim"],
     )
     cli.main()
     assert captured["evaluate"] == "noisy"
+    assert captured["evaluate_world"] == {"seed": 9000, "config": {"min_rooms": 2, "max_rooms": 2}}
+    assert len(list(tmp_path.glob("*.experiment.json"))) == 2
