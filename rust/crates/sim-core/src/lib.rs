@@ -17,6 +17,11 @@ pub enum ObservationMode {
     #[default]
     Normal,
     Rich,
+    /// Full symbolic map baseline for controlled ablations. This is never the
+    /// default and remains distinct from researcher snapshots/evaluator state.
+    Oracle,
+    /// Local symbolic perception with deterministic cell dropout.
+    Noisy,
 }
 
 #[derive(Debug, Error)]
@@ -509,13 +514,13 @@ pub struct Event {
     pub kind: String,
     pub message: String,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VisibleCell {
     pub relative_position: Pos,
     pub terrain: String,
     pub entities: Vec<VisibleEntity>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VisibleEntity {
     pub id: String,
     #[serde(rename = "type")]
@@ -859,6 +864,26 @@ impl Environment {
         positions
     }
 
+    fn oracle_positions(&self) -> BTreeMap<Pos, i32> {
+        (0..self.scenario.height)
+            .flat_map(|y| (0..self.scenario.width).map(move |x| Pos { x, y }))
+            .map(|position| (position, 0))
+            .collect()
+    }
+
+    fn noisy_cell_is_visible(&self, position: Pos) -> bool {
+        if position == self.agent.position {
+            return true;
+        }
+        let mixed = self.seed
+            ^ u64::from(self.step).wrapping_mul(0x9e37_79b9_7f4a_7c15)
+            ^ (position.x as i64 as u64).wrapping_mul(0xbf58_476d_1ce4_e5b9)
+            ^ (position.y as i64 as u64).wrapping_mul(0x94d0_49bb_1331_11eb);
+        // A deterministic 20% dropout keeps observation replay exact while
+        // preventing this mode from becoming a stochastic hidden dependency.
+        !mixed.rotate_left(17).is_multiple_of(5)
+    }
+
     /// Agent observations contain consequences the body can perceive, not the
     /// server-wide event log. Researcher snapshots retain every event.
     fn event_is_locally_perceivable(kind: &str) -> bool {
@@ -913,9 +938,19 @@ impl Environment {
             ObservationMode::Minimal => 1,
             ObservationMode::Normal => self.scenario.vision_radius,
             ObservationMode::Rich => self.scenario.vision_radius + 1,
+            ObservationMode::Noisy => self.scenario.vision_radius,
+            ObservationMode::Oracle => 0,
         } + flashlight_bonus;
         let mut cells = vec![];
-        for (p, _) in self.visible_positions(r) {
+        let positions = if self.observation_mode == ObservationMode::Oracle {
+            self.oracle_positions()
+        } else {
+            self.visible_positions(r)
+        };
+        for (p, _) in positions {
+            if self.observation_mode == ObservationMode::Noisy && !self.noisy_cell_is_visible(p) {
+                continue;
+            }
             let mut entities = vec![];
             if let Some(d) = self.at_door(p) {
                 entities.push(VisibleEntity {
@@ -931,7 +966,18 @@ impl Environment {
                     name: None,
                 })
             };
-            for i in self.items_at(p) {
+            let items = if self.observation_mode == ObservationMode::Oracle {
+                self.scenario
+                    .items
+                    .iter()
+                    .filter(move |item| {
+                        item.position == p && !self.agent.inventory.contains(&item.id)
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                self.items_at(p).collect::<Vec<_>>()
+            };
+            for i in items {
                 entities.push(VisibleEntity {
                     id: i.id.clone(),
                     kind: "item".into(),
@@ -1011,8 +1057,19 @@ impl Environment {
             goal: self.scenario.goal.clone(),
             visible_cells: cells,
             recent_events: self.recent_perceived_events(),
-            perception_note: (self.observation_mode == ObservationMode::Rich)
-                .then(|| "Extended local survey is enabled for this run.".into()),
+            perception_note: match self.observation_mode {
+                ObservationMode::Rich => {
+                    Some("Extended local survey is enabled for this run.".into())
+                }
+                ObservationMode::Oracle => Some(
+                    "Full symbolic map baseline is enabled; researcher snapshots remain separate."
+                        .into(),
+                ),
+                ObservationMode::Noisy => {
+                    Some("Local symbolic survey includes deterministic 20% cell dropout.".into())
+                }
+                ObservationMode::Minimal | ObservationMode::Normal => None,
+            },
             allowed_action_types: vec![
                 "move", "inspect", "pickup", "drop", "use_item", "open", "close", "talk", "wait",
                 "give", "rest",
@@ -2523,6 +2580,45 @@ mod tests {
         assert!(normal.observe().visible_cells.len() < rich.observe().visible_cells.len());
         assert!(minimal.observe().perception_note.is_none());
         assert!(rich.observe().perception_note.is_some());
+    }
+    #[test]
+    fn oracle_and_noisy_sensor_modes_are_explicit_and_deterministic() {
+        let mut scenario = s();
+        scenario.vision_radius = 1;
+        let normal =
+            Environment::new_with_observation_mode(scenario.clone(), 41, ObservationMode::Normal)
+                .unwrap();
+        let oracle =
+            Environment::new_with_observation_mode(scenario.clone(), 41, ObservationMode::Oracle)
+                .unwrap();
+        let noisy_first =
+            Environment::new_with_observation_mode(scenario.clone(), 41, ObservationMode::Noisy)
+                .unwrap();
+        let noisy_second =
+            Environment::new_with_observation_mode(scenario, 41, ObservationMode::Noisy).unwrap();
+        assert!(oracle.observe().visible_cells.len() > normal.observe().visible_cells.len());
+        assert!(
+            oracle
+                .observe()
+                .visible_cells
+                .iter()
+                .any(|cell| cell.entities.iter().any(|entity| entity.id == "k"))
+        );
+        assert_eq!(
+            noisy_first.observe().visible_cells,
+            noisy_second.observe().visible_cells
+        );
+        assert!(noisy_first.observe().visible_cells.len() <= normal.observe().visible_cells.len());
+        assert!((0..64).any(|seed| {
+            let noisy = Environment::new_with_observation_mode(
+                normal.scenario.clone(),
+                seed,
+                ObservationMode::Noisy,
+            )
+            .unwrap();
+            noisy.observe().visible_cells.len() < normal.observe().visible_cells.len()
+        }));
+        assert!(noisy_first.observe().perception_note.is_some());
     }
     #[test]
     fn seeded_perturbations_change_world_state_reproducibly() {
