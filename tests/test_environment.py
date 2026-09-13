@@ -31,7 +31,7 @@ def test_headless_environment_uses_only_rust_client(monkeypatch):
     env = EmbodiedEnv(EmbodiedEnvConfig(scenario_id="generated_grid", observation_mode="minimal", max_steps=9))
     observation, info = env.reset(seed=123)
     assert observation["allowed_action_types"] == ["wait"]
-    assert info == {"run_id": "episode-1", "scenario_id": "generated_grid", "world_manifest": None, "reward_config": None, "seed": 123, "observation_mode": "minimal"}
+    assert info == {"run_id": "episode-1", "scenario_id": "generated_grid", "world_manifest": None, "reward_config": None, "seed": 123, "observation_mode": "minimal", "distribution": None}
     next_observation, reward, terminated, truncated, step_info = env.step({"type": "wait"})
     assert next_observation == {"visible_cells": []}
     assert (reward, terminated, truncated) == (3.0, True, False)
@@ -60,6 +60,16 @@ def test_headless_environment_can_assert_an_authoritative_world_partition(monkey
     env = EmbodiedEnv(EmbodiedEnvConfig(world_partition="test"))
     env.reset(seed=9000)
     assert env._client.created == [(9000, None, "normal", None, {"seed": 9000, "partition": "test"}, None)]
+
+
+def test_headless_environment_accepts_the_named_distribution_api(monkeypatch):
+    monkeypatch.setattr(environment, "RustRunClient", FakeClient)
+    env = EmbodiedEnv(EmbodiedEnvConfig(distribution="train"))
+    _, info = env.reset(seed=1)
+    assert env._client.created == [(1, None, "normal", None, {"seed": 1, "partition": "train"}, None)]
+    assert info["distribution"] == "train"
+    with pytest.raises(ValueError, match="conflicts"):
+        EmbodiedEnvConfig(distribution="train", world_partition="test")
 
 
 def test_headless_environment_rejects_partitioned_catalog_scenarios(monkeypatch):

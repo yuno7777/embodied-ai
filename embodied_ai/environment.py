@@ -15,10 +15,15 @@ class EmbodiedEnvConfig:
     server_url: str = "http://127.0.0.1:8080"
     scenario_id: str | None = None
     generated_world: dict[str, Any] | None = None
+    distribution: Literal["train", "validation", "test"] | None = None
     world_partition: Literal["train", "validation", "test"] | None = None
     reward_config: dict[str, int] | None = None
     observation_mode: str = "normal"
     max_steps: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.distribution is not None and self.world_partition is not None and self.distribution != self.world_partition:
+            raise ValueError("distribution conflicts with world_partition")
 
 
 class EmbodiedEnv:
@@ -42,7 +47,11 @@ class EmbodiedEnv:
         options = options or {}
         scenario_id = options.get("scenario_id", self.config.scenario_id)
         generated_world = options.get("generated_world", self.config.generated_world)
-        world_partition = options.get("world_partition", self.config.world_partition)
+        distribution = options.get("distribution", self.config.distribution)
+        legacy_partition = options.get("world_partition", self.config.world_partition)
+        if distribution is not None and legacy_partition is not None and distribution != legacy_partition:
+            raise ValueError("distribution conflicts with world_partition")
+        world_partition = distribution or legacy_partition
         reward_config = options.get("reward_config", self.config.reward_config)
         observation_mode = options.get("observation_mode", self.config.observation_mode)
         max_steps = options.get("max_steps", self.config.max_steps)
@@ -64,6 +73,7 @@ class EmbodiedEnv:
             "reward_config": created.get("reward_config"),
             "seed": seed,
             "observation_mode": observation_mode,
+            "distribution": world_partition,
         }
 
     def step(self, action: ActionRequest | dict[str, Any]) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
