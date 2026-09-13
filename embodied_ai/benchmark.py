@@ -383,6 +383,30 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
     partitions = report.get("partitions")
     if not isinstance(partitions, dict) or set(partitions) != {"train", "validation", "test"}:
         raise ValueError("generalization report requires train, validation, and test summaries")
+    episodes = report.get("episode_results")
+    if episodes is None:
+        return
+    if not isinstance(episodes, list):
+        raise ValueError("generalization episode_results must be a list when supplied")
+    expected_episodes = {(name, seed) for name, values in distribution.items() for seed in values}
+    observed_episodes = {(row.get("partition"), row.get("seed")) for row in episodes if isinstance(row, dict)}
+    if len(episodes) != len(observed_episodes) or observed_episodes != expected_episodes:
+        raise ValueError("generalization episode_results must contain each declared partition seed exactly once")
+    configs_by_partition = report.get("generator_configs_by_partition")
+    shared_config = report.get("generator_config")
+    for row in episodes:
+        if not isinstance(row, dict) or row.get("observation_mode") != report["observation_mode"]:
+            raise ValueError("generalization episodes must match the report observation_mode")
+        expected_config = configs_by_partition.get(row["partition"]) if isinstance(configs_by_partition, dict) else shared_config
+        if row.get("generator_config") != expected_config:
+            raise ValueError("generalization episodes must match the report generator configuration")
+    for name, summary in partitions.items():
+        if not isinstance(summary, dict):
+            raise ValueError("generalization partition summaries must be objects")
+        rows = [row for row in episodes if row["partition"] == name]
+        successes = sum(row.get("outcome") == "escaped" for row in rows)
+        if summary.get("episodes") != len(rows) or summary.get("success_rate") != successes / len(rows):
+            raise ValueError("generalization partition summaries must match episode_results")
 
 
 def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:

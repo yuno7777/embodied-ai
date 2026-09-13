@@ -115,6 +115,35 @@ def test_generalization_summary_reports_held_out_gap_and_uncertainty():
     assert len(topology_slice["success_rate_wilson_95"]) == 2
 
 
+def test_generalization_provenance_rejects_episode_rows_that_disagree_with_the_report():
+    rows = [
+        {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": None},
+        {"partition": "validation", "seed": 2, "outcome": "timeout", "observation_mode": "normal", "generator_config": None},
+        {"partition": "test", "seed": 3, "outcome": "timeout", "observation_mode": "normal", "generator_config": None},
+    ]
+    report = benchmark.summarize_generalization(rows) | {
+        "engine_version": "rust-v1", "observation_mode": "normal",
+        "world_distribution": {"train": [1], "validation": [2], "test": [3]},
+        "generator_config": None, "generator_configs_by_partition": None,
+        "episode_results": rows,
+    }
+    benchmark.validate_generalization_report(report)
+    tampered = {**report, "episode_results": [{**rows[0], "seed": 99}, *rows[1:]]}
+    try:
+        benchmark.validate_generalization_report(tampered)
+    except ValueError as error:
+        assert "partition seed" in str(error)
+    else:
+        raise AssertionError("a report with an undeclared episode seed was accepted")
+    mismatched_sensor = {**report, "episode_results": [{**rows[0], "observation_mode": "oracle"}, *rows[1:]]}
+    try:
+        benchmark.validate_generalization_report(mismatched_sensor)
+    except ValueError as error:
+        assert "observation_mode" in str(error)
+    else:
+        raise AssertionError("an episode from another sensor condition was accepted")
+
+
 def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):
     def fake_run(provider, seed, _base_url, **kwargs):
         expected = {"seed": seed, "config": {"min_width": 9, "max_width": 9}}
