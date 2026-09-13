@@ -73,6 +73,20 @@ pub struct WorldGeneratorConfig {
     pub min_height: i32,
     pub max_height: i32,
     pub max_attempts: u32,
+    /// Bounds on the compact corridor graph. Field defaults preserve manifests
+    /// created before topology was independently configurable.
+    #[serde(default = "default_min_rooms")]
+    pub min_rooms: u8,
+    #[serde(default = "default_max_rooms")]
+    pub max_rooms: u8,
+}
+
+fn default_min_rooms() -> u8 {
+    2
+}
+
+fn default_max_rooms() -> u8 {
+    3
 }
 
 impl Default for WorldGeneratorConfig {
@@ -84,6 +98,8 @@ impl Default for WorldGeneratorConfig {
             min_height: 7,
             max_height: 11,
             max_attempts: 16,
+            min_rooms: default_min_rooms(),
+            max_rooms: default_max_rooms(),
         }
     }
 }
@@ -100,6 +116,9 @@ impl WorldGeneratorConfig {
             || self.min_width > self.max_width
             || self.min_height > self.max_height
             || self.max_attempts == 0
+            || self.min_rooms < 2
+            || self.max_rooms > 3
+            || self.min_rooms > self.max_rooms
         {
             return Err(SimError::Scenario("invalid world generator bounds".into()));
         }
@@ -173,12 +192,14 @@ impl WorldGenerator {
         let width = rng.random_range(self.config.min_width..=self.config.max_width);
         let height = rng.random_range(self.config.min_height..=self.config.max_height);
         let middle_y = rng.random_range(1..height - 1);
-        // Choose a compact room graph instead of a single fixed layout. Every
-        // divider has one corridor, keeping topology varied but solvable.
-        let divider_xs = if rng.random_bool(0.5) {
-            vec![width / 2]
-        } else {
-            vec![width / 3, width * 2 / 3]
+        // Every divider has one corridor. Configuring the room-count range
+        // makes topology a reproducible experimental variable rather than an
+        // opaque source of random variation.
+        let room_count = rng.random_range(self.config.min_rooms..=self.config.max_rooms);
+        let divider_xs = match room_count {
+            2 => vec![width / 2],
+            3 => vec![width / 3, width * 2 / 3],
+            _ => unreachable!("WorldGeneratorConfig validates supported room counts"),
         };
         let mut room_spans = vec![];
         let mut room_start = 1;
@@ -525,6 +546,38 @@ mod tests {
             .map(|seed| generator.generate(seed).unwrap().scenario.rooms.len())
             .collect::<BTreeSet<_>>();
         assert_eq!(room_counts, BTreeSet::from([2, 3]));
+    }
+
+    #[test]
+    fn configured_room_count_selects_a_reproducible_topology_family() {
+        for room_count in [2, 3] {
+            let generator = WorldGenerator::new(WorldGeneratorConfig {
+                min_rooms: room_count,
+                max_rooms: room_count,
+                ..WorldGeneratorConfig::default()
+            })
+            .unwrap();
+            for seed in 0..16 {
+                let world = generator.generate(seed).unwrap();
+                assert_eq!(world.scenario.rooms.len(), usize::from(room_count));
+                assert_eq!(world.generator_config.min_rooms, room_count);
+                assert_eq!(world.generator_config.max_rooms, room_count);
+            }
+        }
+    }
+
+    #[test]
+    fn generator_rejects_unsupported_or_inverted_room_count_ranges() {
+        for (min_rooms, max_rooms) in [(1, 2), (2, 4), (3, 2)] {
+            assert!(
+                WorldGenerator::new(WorldGeneratorConfig {
+                    min_rooms,
+                    max_rooms,
+                    ..WorldGeneratorConfig::default()
+                })
+                .is_err()
+            );
+        }
     }
 
     #[test]

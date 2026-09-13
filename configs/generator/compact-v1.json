@@ -4,5 +4,7 @@
   "max_width": 11,
   "min_height": 7,
   "max_height": 9,
-  "max_attempts": 16
+  "max_attempts": 16,
+  "min_rooms": 2,
+  "max_rooms": 3
 }
