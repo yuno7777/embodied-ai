@@ -44,7 +44,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 
 ## Not implemented
 
-- The tabular Q baseline can propose open/pickup actions for locally visible object IDs, but it remains deliberately small and is an infrastructure baseline rather than a strong task-solving agent.
+- The tabular Q baseline can propose open/pickup actions only for reachable locally observed object IDs and use public carried-item IDs, but it remains deliberately small and is an infrastructure baseline rather than a strong task-solving agent.
 - Noisy/vision/depth/audio sensors.
 - Automatic curriculum generation, distributed infrastructure, unrestricted external tools, or 3D physics.
 
