@@ -1366,6 +1366,30 @@ mod tests {
     }
 
     #[test]
+    fn committed_decision_schema_matches_rust_metadata_boundary() {
+        let schema: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../schemas/agent-decision.v1.json"
+        ))
+        .unwrap();
+        let metadata = &schema["properties"]["agent_metadata"]["anyOf"][0];
+        assert_eq!(schema["required"], serde_json::json!(["action"]));
+        assert_eq!(metadata["properties"]["confidence"]["maximum"], 1);
+        assert_eq!(metadata["properties"]["planner"]["properties"]["name"]["maxLength"], 128);
+        let accepted = serde_json::json!({
+            "action": {"type": "wait"}, "decision_summary": "bounded",
+            "provider": "test", "model": null, "latency_ms": 1, "token_usage": null,
+            "agent_metadata": {"confidence": 0.5, "value_estimate": -2.0, "policy_entropy": 0.1, "planner": {"name": "astar", "expanded_nodes": 4, "planning_time_ms": 1.5}}
+        });
+        assert!(serde_json::from_value::<DecisionInput>(accepted).is_ok());
+        let rejected = serde_json::json!({
+            "action": {"type": "wait"}, "decision_summary": "bounded",
+            "provider": "test", "model": null, "latency_ms": 1, "token_usage": null,
+            "agent_metadata": {"confidence": 0.5, "reasoning": "not a contract field"}
+        });
+        assert!(serde_json::from_value::<DecisionInput>(rejected).is_err());
+    }
+
+    #[test]
     fn bundled_survival_room_script_escapes() {
         let mut env = Environment::new(scenario(), 42).unwrap();
         let moves = |direction, count| {

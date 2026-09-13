@@ -37,6 +37,18 @@ def test_committed_action_schema_matches_the_canonical_python_wire_model():
         assert schema["properties"][field]["anyOf"][0]["maxLength"] == limit
 
 
+def test_committed_decision_schema_matches_bounded_python_metadata_contract():
+    schema = json.loads((Path(__file__).parents[1] / "schemas" / "agent-decision.v1.json").read_text())
+    generated = AgentDecision.model_json_schema()
+    metadata = schema["properties"]["agent_metadata"]["anyOf"][0]
+    assert schema["additionalProperties"] is False
+    assert schema["required"] == generated["required"] == ["action"]
+    assert schema["properties"]["decision_summary"]["maxLength"] == generated["properties"]["decision_summary"]["maxLength"] == 500
+    assert metadata["properties"]["confidence"] == {"type": "number", "minimum": 0, "maximum": 1}
+    assert metadata["properties"]["policy_entropy"] == {"type": "number", "minimum": 0}
+    assert metadata["properties"]["planner"]["properties"]["name"]["maxLength"] == 128
+
+
 def test_action_schema_rejects_invalid_field_combinations():
     for payload in ({"type": "wait", "direction": "north"}, {"type": "move"}, {"type": "open", "item_id": "key"}):
         try: ActionRequest(**payload)
