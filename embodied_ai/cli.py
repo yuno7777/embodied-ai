@@ -2,11 +2,11 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 from .analysis import check_reproducibility, filter_trajectory, load_jsonl, summarize_trajectory, verify_replay
-from .benchmark import GeneralizationPlan, SeedPartition, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, evaluate_generalization_remote
+from .benchmark import GeneralizationPlan, SeedPartition, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, evaluate_generalization_remote, summarize_generalization
 from .datasets import export_csv, export_jsonl, export_parquet, summarize_world_model_dataset
 from .experiments import ExperimentManifest
 from .environment import EmbodiedEnv, EmbodiedEnvConfig
-from .learning import TabularQConfig, TabularQPolicy, evaluate_tabular_q, train_tabular_q
+from .learning import TabularQConfig, TabularQPolicy, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
 from .paths import ROOT
 from .providers import CautiousProvider, ExplorerProvider, GeminiProvider, ScriptedProvider, RandomValidProvider, MockReasoningProvider
 from .runner import run_remote
@@ -35,6 +35,7 @@ def main():
     generalize=sub.add_parser('generalize'); generalize.add_argument('--provider',choices=provider_choices,default='scripted'); generalize.add_argument('--train-start',type=int,default=0); generalize.add_argument('--train-count',type=int,default=5); generalize.add_argument('--validation-start',type=int,default=8_000); generalize.add_argument('--validation-count',type=int,default=2); generalize.add_argument('--test-start',type=int,default=9_000); generalize.add_argument('--test-count',type=int,default=2); generalize.add_argument('--concurrency',type=int,default=1); generalize.add_argument('--observation-mode',choices=['minimal','normal','rich','oracle','noisy'],default='normal'); generalize.add_argument('--generator-config',type=Path); generalize.add_argument('--train-generator-config',type=Path); generalize.add_argument('--validation-generator-config',type=Path); generalize.add_argument('--test-generator-config',type=Path); generalize.add_argument('--output',type=Path,default=ROOT/'data'/'exports'/'generalization'); generalize.add_argument('--server-url')
     train_q=sub.add_parser('train-tabular'); train_q.add_argument('--seed-start',type=int,default=0); train_q.add_argument('--episodes',type=int,default=20); train_q.add_argument('--max-steps',type=int,default=128); train_q.add_argument('--learning-rate',type=float,default=.2); train_q.add_argument('--discount',type=float,default=.95); train_q.add_argument('--epsilon',type=float,default=.2); train_q.add_argument('--observation-mode',choices=['minimal','normal','rich','oracle','noisy'],default='normal'); train_q.add_argument('--generator-config',type=Path); train_q.add_argument('--checkpoint',type=Path,default=ROOT/'data'/'checkpoints'/'tabular_q.json'); train_q.add_argument('--server-url')
     eval_q=sub.add_parser('evaluate-tabular'); eval_q.add_argument('--checkpoint',type=Path,required=True); eval_q.add_argument('--seed-start',type=int,default=9000); eval_q.add_argument('--episodes',type=int,default=10); eval_q.add_argument('--max-steps',type=int,default=128); eval_q.add_argument('--observation-mode',choices=['minimal','normal','rich','oracle','noisy'],default='normal'); eval_q.add_argument('--generator-config',type=Path); eval_q.add_argument('--server-url')
+    tabular_generalize=sub.add_parser('generalize-tabular'); tabular_generalize.add_argument('--train-start',type=int,default=0); tabular_generalize.add_argument('--train-count',type=int,default=20); tabular_generalize.add_argument('--validation-start',type=int,default=8_000); tabular_generalize.add_argument('--validation-count',type=int,default=10); tabular_generalize.add_argument('--test-start',type=int,default=9_000); tabular_generalize.add_argument('--test-count',type=int,default=10); tabular_generalize.add_argument('--max-steps',type=int,default=128); tabular_generalize.add_argument('--learning-rate',type=float,default=.2); tabular_generalize.add_argument('--discount',type=float,default=.95); tabular_generalize.add_argument('--epsilon',type=float,default=.2); tabular_generalize.add_argument('--observation-mode',choices=['minimal','normal','rich','oracle','noisy'],default='normal'); tabular_generalize.add_argument('--generator-config',type=Path); tabular_generalize.add_argument('--checkpoint',type=Path,default=ROOT/'data'/'checkpoints'/'tabular_q_generalization.json'); tabular_generalize.add_argument('--output',type=Path,default=ROOT/'data'/'exports'/'tabular-generalization'); tabular_generalize.add_argument('--server-url')
     c=sub.add_parser('analyze'); c.add_argument('--trajectory',type=Path,required=True); c.add_argument('--output',type=Path)
     d=sub.add_parser('compare'); d.add_argument('--left',type=Path,required=True); d.add_argument('--right',type=Path,required=True); d.add_argument('--output',type=Path)
     e=sub.add_parser('filter'); e.add_argument('--trajectory',type=Path,required=True); e.add_argument('--output',type=Path,required=True); e.add_argument('--action-type'); e.add_argument('--event-type'); e.add_argument('--valid-only',action='store_true'); e.add_argument('--csv',action='store_true')
@@ -119,6 +120,26 @@ def main():
         manifest=ExperimentManifest(scenario_id='procedural',seed=args.seed_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={"config":generator_config} if generator_config is not None else {},agent_config={"algorithm":"tabular_q","checkpoint":str(args.checkpoint),"episodes":args.episodes,"phase":"evaluate"})
         manifest_path=manifest.persist(args.checkpoint.parent)
         print(json.dumps({"policy":"tabular_q","observation_mode":args.observation_mode,"checkpoint":str(args.checkpoint),"experiment_manifest":str(manifest_path),"episodes":episodes,"success_rate":sum(item["terminal_reason"]=="escaped" for item in episodes)/len(episodes),"mean_reward":sum(item["total_reward"] for item in episodes)/len(episodes)},indent=2))
+    elif args.cmd=='generalize-tabular':
+        if not args.server_url: p.error('Tabular generalization requires --server-url for the authoritative Rust simulation. Start .\\scripts\\dev.ps1 first.')
+        try:
+            generator_config=json.loads(args.generator_config.read_text(encoding='utf-8')) if args.generator_config else None
+            if generator_config is not None and not isinstance(generator_config,dict): raise ValueError('--generator-config must contain a JSON object')
+            partitions={'train':list(range(args.train_start,args.train_start+args.train_count)),'validation':list(range(args.validation_start,args.validation_start+args.validation_count)),'test':list(range(args.test_start,args.test_start+args.test_count))}
+            policy=TabularQPolicy(TabularQConfig(args.learning_rate,args.discount,args.epsilon))
+            factory=lambda: EmbodiedEnv(EmbodiedEnvConfig(server_url=args.server_url, observation_mode=args.observation_mode))
+            options=lambda _partition, seed: {'generated_world': {'seed': seed, **({'config':generator_config} if generator_config is not None else {})}}
+            train_tabular_q(factory,policy,partitions['train'],args.max_steps,lambda seed: options('train',seed))
+            evaluated=evaluate_tabular_partitions(factory,policy,partitions,args.max_steps,options)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            p.error(str(error))
+        checkpoint=policy.save(args.checkpoint); args.output.mkdir(parents=True,exist_ok=True)
+        rows=[{'partition':partition, 'outcome':episode['terminal_reason'], **episode} for partition,episodes in evaluated.items() for episode in episodes]
+        manifest=ExperimentManifest(scenario_id='procedural',seed=args.train_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={'config':generator_config} if generator_config is not None else {},world_distribution={name:tuple(seeds) for name,seeds in partitions.items()},agent_config={'algorithm':'tabular_q','checkpoint':str(checkpoint),'learning_rate':args.learning_rate,'discount':args.discount,'epsilon':args.epsilon,'phase':'train_validate_test'})
+        manifest_path=manifest.persist(args.output)
+        report=summarize_generalization(rows) | {'experiment_id':manifest.experiment_id,'experiment_manifest':manifest_path.name,'checkpoint':str(checkpoint),'observation_mode':args.observation_mode,'world_distribution':partitions,'episode_results':rows}
+        (args.output/'tabular_generalization_report.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n',encoding='utf-8'); export_jsonl(rows,args.output/'tabular_generalization_episodes.jsonl')
+        print(json.dumps(report,indent=2))
     elif args.cmd=='analyze':
         records=load_jsonl(args.trajectory)
         report=summarize_trajectory(records)

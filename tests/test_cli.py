@@ -6,7 +6,7 @@ from embodied_ai import cli
 from embodied_ai.runner import RemoteRunResult
 
 
-@pytest.mark.parametrize("command", ["run", "benchmark", "benchmark-scale", "generalize", "train-tabular", "evaluate-tabular"])
+@pytest.mark.parametrize("command", ["run", "benchmark", "benchmark-scale", "generalize", "train-tabular", "evaluate-tabular", "generalize-tabular"])
 def test_operational_cli_requires_the_rust_authority(monkeypatch, command):
     monkeypatch.setattr(sys, "argv", ["embodied-ai", command])
     with pytest.raises(SystemExit) as error:
@@ -165,3 +165,20 @@ def test_tabular_cli_forwards_sensor_mode_to_the_authoritative_environment(monke
     assert captured["evaluate"] == "noisy"
     assert captured["evaluate_world"] == {"seed": 9000, "config": {"min_rooms": 2, "max_rooms": 2}}
     assert len(list(tmp_path.glob("*.experiment.json"))) == 2
+
+
+def test_tabular_generalization_cli_trains_once_and_reports_disjoint_partitions(monkeypatch, tmp_path):
+    captured = {}
+    def fake_train(_factory, _policy, seeds, _steps, options): captured['train'] = (seeds, options(seeds[0])); return []
+    def fake_evaluate(_factory, _policy, partitions, _steps, options):
+        captured['partitions'] = partitions; captured['test_options'] = options('test', 9000)
+        return {name: [{'seed': seeds[0], 'steps': 1, 'total_reward': 1, 'terminal_reason': 'escaped'}] for name, seeds in partitions.items()}
+    monkeypatch.setattr(cli, 'train_tabular_q', fake_train); monkeypatch.setattr(cli, 'evaluate_tabular_partitions', fake_evaluate)
+    config = tmp_path / 'generator.json'; config.write_text('{"min_rooms":2,"max_rooms":2}')
+    monkeypatch.setattr(sys, 'argv', ['embodied-ai','generalize-tabular','--train-count','1','--validation-count','1','--test-count','1','--generator-config',str(config),'--checkpoint',str(tmp_path/'policy.json'),'--output',str(tmp_path/'report'),'--server-url','http://sim'])
+    cli.main()
+    assert captured['train'] == ([0], {'generated_world': {'seed': 0, 'config': {'min_rooms': 2, 'max_rooms': 2}}})
+    assert captured['partitions'] == {'train': [0], 'validation': [8000], 'test': [9000]}
+    assert captured['test_options']['generated_world']['seed'] == 9000
+    assert (tmp_path/'report'/'tabular_generalization_report.json').exists()
+    assert '"success_rate": 1.0' in (tmp_path/'report'/'tabular_generalization_report.json').read_text()
