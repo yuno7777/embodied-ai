@@ -138,9 +138,10 @@ def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch)
         name = "test"
         def choose_action(self, _observation): return ActionRequest(type="wait")
     monkeypatch.setattr(runner, "RustRunClient", Client)
-    result = runner.run_remote(Provider(), 7, generated_world={"seed": 99})
+    result = runner.run_remote(Provider(), 7, generated_world={"seed": 99}, experiment_id="experiment-7")
     assert result.records[0]["scenario_id"] == "procedural_17"
     assert result.records[0]["scenario_version"] == 1
+    assert result.records[0]["experiment_id"] == "experiment-7"
 
 
 @pytest.mark.parametrize("failure", [RuntimeError("ProviderUnavailable"), ValueError("Malformed provider response")])

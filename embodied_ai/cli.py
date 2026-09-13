@@ -44,10 +44,9 @@ def main():
     if args.cmd=='run':
         if not args.server_url: p.error('Runs require --server-url for the authoritative Rust simulation. Start .\\scripts\\dev.ps1 first.')
         if args.max_steps is not None and args.max_steps < 1: p.error('--max-steps must be positive')
-        result=run_remote(provider_for(args.provider,args.seed,args.model),args.seed,args.server_url,args.memory_mode,args.max_steps,args.observation_mode,max_wall_seconds=args.max_wall_seconds,max_total_tokens=args.max_total_tokens,resume_run_id=args.resume_run_id,restore_replay_id=args.restore_replay_id,memory_window=args.memory_window,scenario_id=args.scenario)
         directory=args.output or ROOT/'data'/'runs'
-        scenario_version=result.records[0].get("scenario_version") if result.records else None
-        manifest=ExperimentManifest(scenario_id=args.scenario,scenario_version=scenario_version,seed=args.seed,provider=args.provider,model=args.model,observation_mode=args.observation_mode,memory_mode=args.memory_mode,memory_window=args.memory_window,max_steps=args.max_steps,max_wall_seconds=args.max_wall_seconds,max_total_tokens=args.max_total_tokens)
+        manifest=ExperimentManifest(scenario_id=args.scenario,seed=args.seed,provider=args.provider,model=args.model,observation_mode=args.observation_mode,memory_mode=args.memory_mode,memory_window=args.memory_window,max_steps=args.max_steps,max_wall_seconds=args.max_wall_seconds,max_total_tokens=args.max_total_tokens)
+        result=run_remote(provider_for(args.provider,args.seed,args.model),args.seed,args.server_url,args.memory_mode,args.max_steps,args.observation_mode,max_wall_seconds=args.max_wall_seconds,max_total_tokens=args.max_total_tokens,resume_run_id=args.resume_run_id,restore_replay_id=args.restore_replay_id,memory_window=args.memory_window,scenario_id=args.scenario,experiment_id=manifest.experiment_id)
         manifest_path=manifest.persist(directory)
         jsonl=export_jsonl(result.records,directory/f'{result.run_id}.jsonl')
         export_parquet([{**record,"observation":json.dumps(record["observation"]),"agent_context":json.dumps(record["agent_context"]),"events":json.dumps(record["events"]),"chosen_action":json.dumps(record["chosen_action"]),"metrics":json.dumps(record["metrics"])} for record in result.records],directory/f'{result.run_id}.parquet')
