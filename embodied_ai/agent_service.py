@@ -144,7 +144,7 @@ class AgentRunManager:
             return dict(status)
 
     def export_path(self, run_id: str, export_type: str) -> Path:
-        if export_type not in {"jsonl", "parquet"}:
+        if export_type not in {"jsonl", "parquet", "experiment_manifest"}:
             raise KeyError(export_type)
         status = self.status(run_id)
         exports = status.get("exports")

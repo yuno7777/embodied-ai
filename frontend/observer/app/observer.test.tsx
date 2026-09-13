@@ -120,7 +120,7 @@ describe("Observer", () => {
   it("starts a selected provider through the separate local agent service", async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (String(url).endsWith(":8090/api/agent-runs") && init?.method === "POST") return response({ run_id: "agent-1", status: "running" });
-      if (String(url).endsWith(":8090/api/agent-runs/agent-1")) return response({ run_id: "agent-1", status: "completed", terminal_reason: "escaped" });
+      if (String(url).endsWith(":8090/api/agent-runs/agent-1")) return response({ run_id: "agent-1", status: "completed", terminal_reason: "escaped", exports: { experiment_manifest: "data/runs/agent-1.experiment.json" } });
       return response(url.endsWith("/api/replays") ? [] : []);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -136,6 +136,7 @@ describe("Observer", () => {
     await waitFor(() => expect(screen.getByText("LIVE LINK: reconnecting · AGENT: completed")).toBeInTheDocument());
     expect(screen.getByText("Pause the agent to take one manual control step.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Wait" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Download experiment manifest" })).toHaveAttribute("href", expect.stringContaining("/exports/experiment_manifest"));
     const request = fetchMock.mock.calls.find(([url]) => String(url).endsWith(":8090/api/agent-runs"));
     expect(request).toBeTruthy();
     expect(JSON.parse(String((request?.[1] as RequestInit).body))).toMatchObject({ provider: "mock_reasoning", seed: 99, max_steps: 25, model: "test-model", observation_mode: "normal", memory_mode: "none", memory_window: 12 });

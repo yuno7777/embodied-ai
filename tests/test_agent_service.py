@@ -48,6 +48,11 @@ def test_agent_export_downloads_cannot_escape_the_configured_output_directory(tm
     manager._runs["safe"] = {"exports": {"jsonl": str(trajectory)}}
     assert manager.export_path("safe", "jsonl") == trajectory.resolve()
 
+    manifest = output / "run.experiment.json"
+    manifest.write_text("{}", encoding="utf-8")
+    manager._runs["manifest"] = {"exports": {"experiment_manifest": str(manifest)}}
+    assert manager.export_path("manifest", "experiment_manifest") == manifest.resolve()
+
     outside = tmp_path / "secret.jsonl"
     outside.write_text("not an export", encoding="utf-8")
     manager._runs["unsafe"] = {"exports": {"jsonl": str(outside)}}
