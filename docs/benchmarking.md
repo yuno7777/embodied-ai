@@ -64,3 +64,8 @@ These measurements exclude HTTP, rendering, disk persistence, and provider laten
 # Benchmarking protocol
 
 Generalization reports evaluate a fixed provider over explicit train, validation, and test seed lists. Treat the generator configuration and observation mode as experimental inputs, not presentation settings: both are persisted in the immutable experiment manifest and report. Episode exports capture the actual Rust-generated room count and hazard families from each world manifest; split summaries and compatible-report comparisons stratify success rates by both mechanics. Do not compare a restricted-perception result against an `oracle` result as if they measured the same task.
+
+Before interpreting a report, run `audit-generalization`. It rejects empty or
+overlapping seed splits, ambiguous shared versus per-split generator
+configuration, and any supplied episode evidence that does not reconstruct the
+claimed split summaries.
