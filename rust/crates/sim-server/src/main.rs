@@ -1727,6 +1727,17 @@ mod tests {
             serde_json::from_slice::<serde_json::Value>(&held_out_body).unwrap(),
             "test"
         );
+        let outside_distribution = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/worlds/partition/10000")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(outside_distribution.status(), StatusCode::NOT_FOUND);
 
         let benchmark = app
             .oneshot(
