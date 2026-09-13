@@ -46,7 +46,7 @@ class RustRunClient:
     def stop(self, run_id: str, reason: str) -> dict: return self.client.post(f"/api/runs/{run_id}/stop", json={"reason": reason}).raise_for_status().json()
     def close(self) -> None: self.client.close()
 
-def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None, experiment_id: str | None = None) -> RemoteRunResult:
+def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None, experiment_id: str | None = None, include_research_snapshots: bool = False) -> RemoteRunResult:
     context=AgentContext(memory_mode=memory_mode, memory_window=memory_window); client=RustRunClient(base_url)
     try:
         if hasattr(provider, "reset"):
@@ -71,6 +71,9 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
             if status["done"]: return RemoteRunResult(run_id,status.get("terminal_reason"),steps,[],"run was already terminal")
             observation=client.observation(run_id)
         records=[]; total_tokens=0; started=time.monotonic()
+        # Snapshots are deliberately captured into export-only records, never
+        # into ``observation`` or ``AgentContext`` passed to the provider.
+        research_snapshot = client.snapshot(run_id) if include_research_snapshots else None
         if on_created is not None:
             on_created(run_id)
         try:
@@ -105,9 +108,13 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 step_started=time.perf_counter(); result=client.step(run_id,action); step_latency_ms=(time.perf_counter()-step_started)*1000; steps=result["step_number"]
                 if scenario is None:
                     scenario = client.scenarios()[0]
+                next_research_snapshot = client.snapshot(run_id) if include_research_snapshots else None
                 records.append({"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"observation_mode":observation_mode,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"events":result["events"],"reward":result["reward"],"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
+                if include_research_snapshots:
+                    records[-1]["research_snapshot"] = research_snapshot
+                    records[-1]["next_research_snapshot"] = next_research_snapshot
                 records[-1]["provider_backoff_ms"] = list(getattr(provider, "last_backoff_ms", []))
-                context.record(observation,action.model_dump(exclude_none=True),result["events"]); observation=result["observation"]
+                context.record(observation,action.model_dump(exclude_none=True),result["events"]); observation=result["observation"]; research_snapshot = next_research_snapshot
                 if result["done"]: return RemoteRunResult(run_id,result["terminal_reason"],steps,records,world_manifest=world_manifest)
         except Exception:
             client.provider_error(run_id)

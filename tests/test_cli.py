@@ -47,6 +47,16 @@ def test_run_cli_forwards_a_generator_config_file(monkeypatch, tmp_path):
     assert captured["generated_world"] == {"seed": 99, "config": {"min_width": 9, "max_width": 9}}
 
 
+def test_run_cli_requires_an_explicit_flag_for_privileged_research_snapshots(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(cli, "run_remote", lambda *_args, **kwargs: (captured.update(kwargs) or RemoteRunResult("run-1", "timeout", 0, [])))
+    monkeypatch.setattr(cli, "export_jsonl", lambda _records, path: path)
+    monkeypatch.setattr(cli, "export_parquet", lambda _records, _path: None)
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "run", "--include-research-snapshots", "--server-url", "http://sim", "--output", str(tmp_path)])
+    cli.main()
+    assert captured["include_research_snapshots"] is True
+
+
 def test_generalize_cli_defaults_match_authoritative_seed_partitions(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setattr(

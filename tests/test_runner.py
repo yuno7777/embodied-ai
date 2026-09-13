@@ -159,6 +159,32 @@ def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch)
     assert result.world_manifest == {"scenario": {"id": "procedural_17", "version": 1}}
 
 
+def test_research_snapshots_are_opt_in_and_never_added_to_provider_input(monkeypatch):
+    calls = []
+    class Client:
+        def __init__(self, _base_url): self.step_number = 0
+        def create(self, *_args): return {"run_id": "r", "observation": {"allowed_action_types": ["wait"], "visible_cells": []}}
+        def scenarios(self): return [{"id": "survival_room", "version": 3}]
+        def status(self, _run_id): return {"done": False, "paused": False, "step": self.step_number}
+        def snapshot(self, _run_id): calls.append("snapshot"); return {"hidden_position": self.step_number}
+        def record_decision(self, *_args): return {}
+        def step(self, _run_id, _action):
+            self.step_number += 1
+            return {"step_number": 1, "observation": {"allowed_action_types": ["wait"], "visible_cells": []}, "events": [], "reward": 1, "done": True, "terminal_reason": "escaped", "metrics": {}}
+        def close(self): pass
+    class Provider:
+        name = "boundary-test"
+        def choose_action(self, observation):
+            assert "hidden_position" not in observation
+            return ActionRequest(type="wait")
+    monkeypatch.setattr(runner, "RustRunClient", Client)
+    result = runner.run_remote(Provider(), 7, include_research_snapshots=True)
+    assert calls == ["snapshot", "snapshot"]
+    assert result.records[0]["research_snapshot"] == {"hidden_position": 0}
+    assert result.records[0]["next_research_snapshot"] == {"hidden_position": 1}
+    assert "hidden_position" not in result.records[0]["agent_context"]
+
+
 @pytest.mark.parametrize("failure", [RuntimeError("ProviderUnavailable"), ValueError("Malformed provider response")])
 def test_provider_failure_marks_the_authoritative_run_as_provider_error(monkeypatch, failure):
     calls = []

@@ -18,9 +18,10 @@ def test_world_model_transitions_preserve_episode_boundaries_and_policy_observat
 
 
 def test_world_model_transitions_require_explicit_privileged_opt_in():
-    records = [{"run_id": "a", "step": 1, "observation": {}, "chosen_action": {"type": "wait"}, "research_snapshot": {"secret": True}}]
+    records = [{"run_id": "a", "step": 1, "observation": {}, "chosen_action": {"type": "wait"}, "research_snapshot": {"secret": True}, "next_research_snapshot": {"secret": "after"}}]
     transition = world_model_transitions(records, include_privileged_state=True)[0]
     assert transition["privileged_state_t"] == {"secret": True}
+    assert transition["privileged_state_t_plus_1"] == {"secret": "after"}
 
 
 def test_world_model_transitions_reject_mixed_run_provenance():

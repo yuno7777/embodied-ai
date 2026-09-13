@@ -59,6 +59,8 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
         }
         if include_privileged_state:
             transition["privileged_state_t"] = record.get("research_snapshot")
-            transition["privileged_state_t_plus_1"] = (next_record or record).get("research_snapshot")
+            transition["privileged_state_t_plus_1"] = record.get(
+                "next_research_snapshot", (next_record or record).get("research_snapshot")
+            )
         transitions.append(transition)
     return transitions
