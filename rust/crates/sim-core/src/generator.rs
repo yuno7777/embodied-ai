@@ -1,6 +1,9 @@
 //! Deterministic symbolic-world generation for Environment Domain 1.
 
-use crate::{Container, Door, Hazard, Item, Npc, Pos, Room, Route, Scenario, SimError};
+use crate::{
+    Container, Door, Hazard, Item, Npc, Perturbation, PerturbationEffect, Pos, Room, Route,
+    Scenario, SimError,
+};
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, VecDeque};
@@ -303,7 +306,14 @@ impl WorldGenerator {
                 key_id: None,
                 contents: vec![],
             }],
-            perturbations: vec![],
+            perturbations: vec![Perturbation {
+                id: "hazard_cooldown".into(),
+                step: rng.random_range(4..=12),
+                effect: PerturbationEffect::DeactivateHazard,
+                target_id: "hazard".into(),
+                destination: None,
+                probability_per_mille: 1000,
+            }],
             rooms: vec![
                 Room {
                     id: "generated_left_room".into(),
@@ -489,6 +499,11 @@ mod tests {
             scenario.spawn,
             scenario.items[0].position,
             false
+        ));
+        assert!(matches!(
+            scenario.perturbations.as_slice(),
+            [Perturbation { id, target_id, effect: PerturbationEffect::DeactivateHazard, probability_per_mille: 1000, .. }]
+                if id == "hazard_cooldown" && target_id == "hazard"
         ));
     }
 

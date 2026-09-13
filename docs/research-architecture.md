@@ -26,7 +26,7 @@ Rust sim-core (authoritative transition, evaluator, seeded RNG)
 - Rust is the only simulation authority. Python submits typed actions and does not simulate world state.
 - Normal agent observations exclude researcher coordinates, hidden contents, and NPC trust. Research snapshots and evaluator output are separate.
 - Catalog scenarios and generated worlds are deterministic, versioned, and replayable.
-- Generated worlds contain a pair of rooms, an interior divider, a traversable corridor, and constraint-validated key-to-exit routes.
+- Generated worlds contain a pair of rooms, an interior divider, a traversable corridor, a deterministic hazard-cooldown perturbation, and constraint-validated key-to-exit routes.
 - Train, validation, and test seed partitions are explicit and required to be disjoint in both Rust and Python evaluation planning.
 - The Python `EmbodiedEnv` implements reset/step semantics over the Rust service, including generated-world and reward-profile requests.
 - Replays persist generated manifests and reward configurations; replay verification checks these inputs before declaring two executions comparable.
