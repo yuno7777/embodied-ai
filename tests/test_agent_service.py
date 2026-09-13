@@ -15,8 +15,10 @@ def test_agent_service_validates_browser_requests_strictly():
 
 
 def test_agent_service_starts_a_provider_only_after_the_rust_run_exists(monkeypatch, tmp_path: Path):
-    def fake_run_remote(_provider, _seed, _url, _memory, _max_steps, _mode, on_created, _wall, _tokens, memory_window):
+    captured = {}
+    def fake_run_remote(_provider, _seed, _url, _memory, _max_steps, _mode, on_created, _wall, _tokens, memory_window, **kwargs):
         assert memory_window == 5
+        captured.update(kwargs)
         on_created("authoritative-run")
         return RemoteRunResult("authoritative-run", "escaped", 3, [])
 
@@ -25,6 +27,16 @@ def test_agent_service_starts_a_provider_only_after_the_rust_run_exists(monkeypa
     started = manager.start(AgentRunRequest(provider="scripted", seed=7))
     assert started["run_id"] == "authoritative-run"
     assert started["status"] in {"running", "completed"}
+    assert isinstance(captured["experiment_id"], str)
+    assert len(list(tmp_path.glob("*.experiment.json"))) == 1
+
+
+def test_agent_service_retains_manifest_export_without_trajectory_records(tmp_path: Path):
+    manifest = tmp_path / "experiment.experiment.json"
+    manifest.write_text("{}", encoding="utf-8")
+    manager = AgentRunManager("http://127.0.0.1:8080", tmp_path)
+    manager._finish(RemoteRunResult("authoritative-run", "provider_error", 0, []), manifest)
+    assert manager.status("authoritative-run")["exports"] == {"experiment_manifest": str(manifest)}
 
 
 def test_agent_export_downloads_cannot_escape_the_configured_output_directory(tmp_path: Path):

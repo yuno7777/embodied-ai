@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .cli import provider_for
 from .datasets import export_jsonl, export_parquet
+from .experiments import ExperimentManifest
 from .paths import ROOT
 from .runner import RemoteRunResult, run_remote
 
@@ -57,6 +58,20 @@ class AgentRunManager:
 
         def worker() -> None:
             try:
+                manifest = ExperimentManifest(
+                    scenario_id="survival_room",
+                    seed=request.seed,
+                    provider=request.provider,
+                    model=request.model,
+                    observation_mode=request.observation_mode,
+                    memory_mode=request.memory_mode,
+                    memory_window=request.memory_window,
+                    max_steps=request.max_steps,
+                    max_wall_seconds=request.max_wall_seconds,
+                    max_total_tokens=request.max_total_tokens,
+                    agent_config={"launch": "agent_service", "provider": request.provider},
+                )
+                manifest_path = manifest.persist(self.output_directory)
                 result = run_remote(
                     provider_for(request.provider, request.seed, request.model),
                     request.seed,
@@ -68,8 +83,9 @@ class AgentRunManager:
                     request.max_wall_seconds,
                     request.max_total_tokens,
                     memory_window=request.memory_window,
+                    experiment_id=manifest.experiment_id,
                 )
-                self._finish(result)
+                self._finish(result, manifest_path)
             except Exception as error:  # surfaced to the local observer; no secret-bearing request data is retained
                 holder["error"] = "Provider orchestration failed: " + str(error)
                 run_id = holder.get("run_id")
@@ -88,8 +104,10 @@ class AgentRunManager:
             raise RuntimeError("The provider did not return a run identifier.")
         return self.status(run_id)
 
-    def _finish(self, result: RemoteRunResult) -> None:
+    def _finish(self, result: RemoteRunResult, manifest_path: Path | None = None) -> None:
         exports: dict[str, str] = {}
+        if manifest_path is not None:
+            exports["experiment_manifest"] = str(manifest_path)
         if result.records:
             self.output_directory.mkdir(parents=True, exist_ok=True)
             jsonl = export_jsonl(result.records, self.output_directory / f"{result.run_id}.jsonl")
