@@ -34,8 +34,22 @@ class EmbodiedEnv:
     evaluation output and must not be passed into a policy as perception.
     """
 
-    def __init__(self, config: EmbodiedEnvConfig | None = None):
-        self.config = config or EmbodiedEnvConfig()
+    def __init__(
+        self,
+        config: EmbodiedEnvConfig | None = None,
+        *,
+        distribution: Literal["train", "validation", "test"] | None = None,
+        observation_mode: str | None = None,
+        server_url: str | None = None,
+    ):
+        """Create an explicit config or use the concise research-loop keywords."""
+        if config is not None and any(value is not None for value in (distribution, observation_mode, server_url)):
+            raise ValueError("pass either config or direct environment keywords")
+        self.config = config or EmbodiedEnvConfig(
+            distribution=distribution,
+            observation_mode=observation_mode or "normal",
+            server_url=server_url or "http://127.0.0.1:8080",
+        )
         self._client = RustRunClient(self.config.server_url)
         self._run_id: str | None = None
 

@@ -72,6 +72,16 @@ def test_headless_environment_accepts_the_named_distribution_api(monkeypatch):
         EmbodiedEnvConfig(distribution="train", world_partition="test")
 
 
+def test_headless_environment_accepts_concise_research_loop_keywords(monkeypatch):
+    monkeypatch.setattr(environment, "RustRunClient", FakeClient)
+    env = EmbodiedEnv(distribution="test", observation_mode="noisy", server_url="http://sim")
+    _, info = env.reset(seed=9000)
+    assert env._client.created == [(9000, None, "noisy", None, {"seed": 9000, "partition": "test"}, None)]
+    assert info["distribution"] == "test"
+    with pytest.raises(ValueError, match="either config"):
+        EmbodiedEnv(EmbodiedEnvConfig(), distribution="train")
+
+
 def test_headless_environment_rejects_partitioned_catalog_scenarios(monkeypatch):
     monkeypatch.setattr(environment, "RustRunClient", FakeClient)
     env = EmbodiedEnv(EmbodiedEnvConfig(scenario_id="survival_room", world_partition="train"))
