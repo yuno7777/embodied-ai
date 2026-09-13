@@ -33,6 +33,7 @@ class RustRunClient:
         request["observation_mode"] = observation_mode
         return self.client.post("/api/runs", json=request).raise_for_status().json()
     def scenarios(self) -> list[dict]: return self.client.get("/api/scenarios").raise_for_status().json()
+    def world_partition(self, seed: int) -> str: return self.client.get(f"/api/worlds/partition/{seed}").raise_for_status().json()
     def snapshot(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}").raise_for_status().json()
     def status(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/status").raise_for_status().json()
     def observation(self, run_id: str) -> dict: return self.client.get(f"/api/runs/{run_id}/observation").raise_for_status().json()

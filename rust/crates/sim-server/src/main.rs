@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 use sim_core::{
     Action, Environment, Event, Observation, ObservationMode, RewardConfig, Scenario, StepResult,
     WorldSnapshot,
-    generator::{WorldGenerator, WorldGeneratorConfig, WorldManifest},
+    generator::{
+        WorldDistribution, WorldGenerator, WorldGeneratorConfig, WorldManifest, WorldPartition,
+    },
 };
 use std::{
     collections::HashMap,
@@ -438,6 +440,18 @@ async fn generate_world(
         .generate(request.seed)
         .map(Json)
         .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))
+}
+async fn world_partition(Path(seed): Path<u64>) -> Result<Json<WorldPartition>, StatusCode> {
+    let distribution = WorldDistribution::default();
+    [
+        WorldPartition::Train,
+        WorldPartition::Validation,
+        WorldPartition::Test,
+    ]
+    .into_iter()
+    .find(|partition| distribution.contains(*partition, seed))
+    .map(Json)
+    .ok_or(StatusCode::NOT_FOUND)
 }
 async fn create(
     State(state): State<AppState>,
@@ -1105,6 +1119,7 @@ fn app(state: AppState) -> Router {
         .route("/api/scenarios", get(scenarios))
         .route("/api/scenarios/{id}", get(scenario_by_id))
         .route("/api/worlds/generate", post(generate_world))
+        .route("/api/worlds/partition/{seed}", get(world_partition))
         .route("/api/runs", get(runs).post(create))
         .route("/api/runs/{id}", get(snapshot))
         .route("/api/runs/{id}/status", get(run_status))
@@ -1692,6 +1707,25 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .starts_with("fnv1a64:")
+        );
+
+        let held_out = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/worlds/partition/9000")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(held_out.status(), StatusCode::OK);
+        let held_out_body = axum::body::to_bytes(held_out.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&held_out_body).unwrap(),
+            "test"
         );
 
         let benchmark = app

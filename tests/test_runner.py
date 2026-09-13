@@ -123,6 +123,18 @@ def test_rust_client_fetches_authoritative_replay_metadata():
     assert calls == ["/api/runs/run-1/replay"]
 
 
+def test_rust_client_fetches_authoritative_world_partition():
+    class Response:
+        def raise_for_status(self): return self
+        def json(self): return "test"
+    class Client:
+        def get(self, path):
+            assert path == "/api/worlds/partition/9000"; return Response()
+    client = object.__new__(RustRunClient)
+    client.client = Client()
+    assert client.world_partition(9000) == "test"
+
+
 def test_generated_world_trajectory_uses_manifest_scenario_metadata(monkeypatch):
     class Client:
         def __init__(self, _base_url): pass
