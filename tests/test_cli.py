@@ -105,3 +105,31 @@ def test_generalize_cli_forwards_a_nondefault_observation_mode(monkeypatch, tmp_
     )
     cli.main()
     assert captured["observation_mode"] == "noisy"
+
+
+def test_tabular_cli_forwards_sensor_mode_to_the_authoritative_environment(monkeypatch, tmp_path):
+    captured = {}
+    def fake_train(factory, _policy, _seeds, _max_steps, _options):
+        captured["train"] = factory().config.observation_mode
+        return [{"total_reward": 1, "terminal_reason": "escaped"}]
+    monkeypatch.setattr(cli, "train_tabular_q", fake_train)
+    checkpoint = tmp_path / "tabular.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["embodied-ai", "train-tabular", "--observation-mode", "noisy", "--checkpoint", str(checkpoint), "--server-url", "http://sim"],
+    )
+    cli.main()
+    assert captured["train"] == "noisy"
+
+    def fake_evaluate(factory, _policy, _seeds, _max_steps, _options):
+        captured["evaluate"] = factory().config.observation_mode
+        return [{"total_reward": 1, "terminal_reason": "escaped"}]
+    monkeypatch.setattr(cli, "evaluate_tabular_q", fake_evaluate)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["embodied-ai", "evaluate-tabular", "--observation-mode", "noisy", "--checkpoint", str(checkpoint), "--server-url", "http://sim"],
+    )
+    cli.main()
+    assert captured["evaluate"] == "noisy"
