@@ -99,6 +99,7 @@ python -m embodied_ai.cli run --scenario survival_room --provider scripted --see
 python -m embodied_ai.cli run --generated-world-seed 42 --provider random_valid --seed 42 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --generated-world-seed 42 --generator-config configs/generator/compact-v1.json --provider random_valid --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli run --generated-world-seed 42 --generator-config configs/generator/three-room-v1.json --provider random_valid --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli run --scenario survival_room --reward-config configs/rewards/exploration-v1.json --provider scripted --seed 42 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli benchmark --scenario survival_room --provider scripted --runs 20 --seed-start 1000 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli benchmark-scale --provider random_valid --runs 64 --workers 1,8,32,64 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli generalize --provider scripted --train-start 0 --train-count 20 --validation-start 8000 --validation-count 10 --test-start 9000 --test-count 10 --server-url http://127.0.0.1:8080
@@ -131,6 +132,8 @@ Start the Rust server before either command. Rust events are persisted as replay
 `audit-generalization` performs that provenance check on one report and emits a compact receipt containing its experimental conditions, canonical generator-config fingerprints, split counts, and whether episode-level evidence was checked. It is local and read-only; use it before comparing, archiving, or sharing a report.
 
 `audit-experiment` is the corresponding local, read-only check for one immutable experiment manifest. It first verifies the persisted fingerprint, then, when given a JSONL trajectory, requires every row to carry the same experiment ID, observation mode, generated-world manifest, and configured policy-state mode. It rejects mixed run IDs or altered provenance instead of treating nearby-looking artifacts as one experiment.
+
+`run --reward-config <path>` accepts one complete JSON reward profile and submits it to the Rust authority. The exact profile is pinned into the experiment manifest and copied to each trajectory row; `audit-experiment` verifies it when the manifest declares one. Use this for evaluator ablations, not as a substitute for changing world-transition rules.
 
 Benchmark summaries report control wall-clock measurements and mean episode-initialization latency separately from `simulation_steps_per_second`, which is derived from the Rust server's authoritative per-step simulation timings. Initialization latency is local Rust HTTP/create overhead, not a simulator-throughput claim; provider/model latency is likewise not presented as simulator throughput.
 

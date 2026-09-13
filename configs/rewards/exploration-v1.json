@@ -1,0 +1,7 @@
+{
+  "baseline_per_step": -1,
+  "discovery_bonus": 8,
+  "invalid_action_penalty": -3,
+  "terminal_success": 100,
+  "terminal_failure": -100
+}
