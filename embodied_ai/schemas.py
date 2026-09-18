@@ -338,6 +338,18 @@ class TrajectoryStep(BaseModel):
             raise ValueError("research snapshots must be recorded as a before/after pair")
         return self
 
+def validate_trajectory_record(record: dict) -> None:
+    """Validate declared trajectory versions; absent versions identify legacy rows."""
+    if not isinstance(record, dict):
+        raise ValueError("trajectory records must be JSON objects")
+    if "trajectory_schema_version" not in record:
+        return
+    version = record["trajectory_schema_version"]
+    if type(version) is not int or version != 1:
+        raise ValueError("unsupported trajectory_schema_version")
+    TrajectoryStep.model_validate(record)
+
+
 class RunMetadata(BaseModel):
     protocol_version: int = PROTOCOL_VERSION
     dataset_schema_version: int = DATASET_SCHEMA_VERSION

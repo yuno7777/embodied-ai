@@ -4,9 +4,11 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 import pandas as pd
-from .schemas import TrajectoryStep
+from .schemas import TrajectoryStep, validate_trajectory_record
 
 def export_jsonl(records: list[dict[str, Any]], path: Path) -> Path:
+    for record in records:
+        validate_trajectory_record(record)
     records = [
         TrajectoryStep.model_validate(record).model_dump(mode="json")
         if record.get("trajectory_schema_version") == 1 else record
@@ -33,6 +35,8 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
     policy observations. Privileged snapshots are included solely when records
     explicitly contain them and a researcher opts in.
     """
+    for record in records:
+        validate_trajectory_record(record)
     ordered = sorted(records, key=lambda record: (record.get("run_id", ""), record.get("step", 0)))
     provenance_by_run: dict[str, str] = {}
     for record in ordered:

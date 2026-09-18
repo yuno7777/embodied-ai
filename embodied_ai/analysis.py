@@ -7,7 +7,7 @@ from typing import Any
 import json
 import hashlib
 from pathlib import Path
-from .schemas import ActionRequest, TrajectoryStep
+from .schemas import ActionRequest, validate_trajectory_record
 
 
 class TrajectoryValidationError(ValueError):
@@ -18,11 +18,10 @@ def validate_trajectory(records: list[dict[str, Any]]) -> None:
     if not records:
         raise TrajectoryValidationError("Trajectory has no decision records.")
     for record in records:
-        if record.get("trajectory_schema_version") == 1:
-            try:
-                TrajectoryStep.model_validate(record)
-            except ValueError as error:
-                raise TrajectoryValidationError(f"Invalid versioned trajectory step: {error}") from error
+        try:
+            validate_trajectory_record(record)
+        except ValueError as error:
+            raise TrajectoryValidationError(f"Invalid versioned trajectory step: {error}") from error
     run_ids = {record.get("run_id") for record in records}
     if len(run_ids) != 1 or None in run_ids:
         raise TrajectoryValidationError("Trajectory must contain one non-empty run_id.")
@@ -79,6 +78,11 @@ def summarize_trajectory(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 def filter_trajectory(records: list[dict[str, Any]], *, action_type: str | None = None, valid_only: bool = False, event_type: str | None = None) -> list[dict[str, Any]]:
+    for record in records:
+        try:
+            validate_trajectory_record(record)
+        except ValueError as error:
+            raise TrajectoryValidationError(f"Invalid versioned trajectory step: {error}") from error
     return [
         record for record in records
         if (action_type is None or record.get("chosen_action",{}).get("type") == action_type)

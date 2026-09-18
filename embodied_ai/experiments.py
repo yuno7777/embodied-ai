@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .paths import ROOT
-from .schemas import TrajectoryStep
+from .schemas import validate_trajectory_record
 
 
 EXPERIMENT_MANIFEST_VERSION = 2
@@ -121,8 +121,7 @@ def audit_experiment_manifest(
     if any(not isinstance(record, dict) for record in records):
         raise ValueError("trajectory records must be JSON objects")
     for record in records:
-        if record.get("trajectory_schema_version") == 1:
-            TrajectoryStep.model_validate(record)
+        validate_trajectory_record(record)
         if record.get("experiment_id") != manifest.experiment_id:
             raise ValueError("trajectory experiment_id does not match its manifest")
         if record.get("observation_mode") != manifest.observation_mode:
