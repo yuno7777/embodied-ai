@@ -26,10 +26,10 @@ def validate_trajectory(records: list[dict[str, Any]]) -> None:
     if len(run_ids) != 1 or None in run_ids:
         raise TrajectoryValidationError("Trajectory must contain one non-empty run_id.")
     steps = [record.get("step") for record in records]
-    if any(not isinstance(step, int) or step < 1 for step in steps):
+    if any(type(step) is not int or step < 1 for step in steps):
         raise TrajectoryValidationError("Each record needs a positive integer step.")
-    if steps != list(range(1, len(records) + 1)):
-        raise TrajectoryValidationError("Trajectory steps must be contiguous and start at 1.")
+    if steps != list(range(steps[0], steps[0] + len(records))):
+        raise TrajectoryValidationError("Trajectory steps must be contiguous.")
     if any(not isinstance(record.get("chosen_action"), dict) for record in records):
         raise TrajectoryValidationError("Each record needs a structured chosen_action.")
     if any(not isinstance(record["chosen_action"].get("type"), str) for record in records):
@@ -66,6 +66,9 @@ def summarize_trajectory(records: list[dict[str, Any]]) -> dict[str, Any]:
         "provider": final.get("provider"),
         "model": final.get("model"),
         "steps": len(records),
+        "first_step": records[0]["step"],
+        "last_step": final["step"],
+        "includes_episode_start": records[0]["step"] == 1,
         "outcome": final.get("terminal_reason"),
         "terminal": bool(final.get("done")),
         "valid_action_rate": sum(bool(record.get("action_valid")) for record in records) / len(records),

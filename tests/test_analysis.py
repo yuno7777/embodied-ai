@@ -10,9 +10,29 @@ def records():
     ]
 
 
+def test_resumed_trajectory_summary_reports_segment_bounds():
+    rows = records()
+    rows[0]["step"], rows[1]["step"] = 8, 9
+    summary = summarize_trajectory(rows)
+    assert summary["steps"] == 2
+    assert summary["first_step"] == 8
+    assert summary["last_step"] == 9
+    assert summary["includes_episode_start"] is False
+    assert summary["mean_provider_latency_ms"] == 5
+
+
+@pytest.mark.parametrize("steps", [(8, 10), (8, 8), (9, 8), (True, 2)])
+def test_trajectory_segments_reject_gaps_duplicates_reverse_order_and_booleans(steps):
+    rows = records()
+    rows[0]["step"], rows[1]["step"] = steps
+    with pytest.raises(TrajectoryValidationError):
+        validate_trajectory(rows)
+
+
 def test_trajectory_summary_is_based_on_exported_records_only():
     summary = summarize_trajectory(records())
     assert summary["run_id"] == "run-1"
+    assert summary["includes_episode_start"] is True
     assert summary["outcome"] == "escaped"
     assert summary["valid_action_rate"] == 1
     assert summary["action_counts"] == {"inspect": 1, "move": 1}
