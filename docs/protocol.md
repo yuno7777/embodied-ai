@@ -1,5 +1,12 @@
 # Protocol v1
 
+Trajectory version dispatch is shared by JSONL export, experiment audit, summary,
+filtering, and world-model conversion. Only an absent `trajectory_schema_version`
+uses legacy handling. A declared version must be the integer `1`; unknown versions,
+nulls, booleans, strings, and floating-point values are rejected before processing.
+Filtering validates rows before selection, including rows that would be excluded.
+JSONL export validates the complete input before opening the destination file.
+
 The canonical protocol version is `1`. A provider receives an `Observation` and returns one `ActionRequest`; it never receives a `WorldSnapshot` or a mutation channel. `Observation.agent` is an `AgentObservation`, deliberately excluding agent identity and absolute position. Local NPC observations exclude hidden trust values, and room identifiers are researcher-only. `StepResult` contains the new filtered observation, reward, terminal information and structured events. `WorldSnapshot` is researcher-only.
 
 The committed [RewardConfig JSON Schema](../schemas/reward-config.v1.json), [WorldManifest JSON Schema](../schemas/world-manifest.v1.json), [Observation JSON Schema](../schemas/observation.v1.json), [ActionResult JSON Schema](../schemas/action-result.v1.json), [EpisodeState JSON Schema](../schemas/episode-state.v1.json), [ActionRequest JSON Schema](../schemas/action-request.v1.json), and [AgentDecision JSON Schema](../schemas/agent-decision.v1.json) are the versioned wire artifacts. Python validates complete reward configurations, every Rust HTTP observation, action result, episode status, and generated-world manifest before they can reach orchestration or a provider; the models reject extra researcher/debug fields and unknown generator settings. Rust remains the final authority for world generation, observation construction, evaluation, and action validation.
