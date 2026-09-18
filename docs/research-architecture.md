@@ -2,6 +2,21 @@
 
 This repository is a headless-first symbolic embodied research harness. It is not an AGI system. Its tabular-Q learner is an intentionally small lifecycle baseline, not a claim of general-purpose embodied intelligence.
 
+## Incomplete legacy transition targets
+
+World-model conversion preserves explicit `next_observation` and
+`next_research_snapshot` fields, including explicit nulls. For older rows that
+omit these fields, it may use the following step only when the run identity is
+nonempty, both step numbers are unique and consecutive positive integers, and
+the current row is not terminal. Gaps, duplicate steps, episode endings, and
+cross-run boundaries never produce guessed self-loops. Unknown targets remain
+null; records are retained so actions and rewards are not silently discarded.
+
+`audit-dataset` reports `transitions_missing_next_observation`. Training code
+requiring complete prediction pairs must exclude these incomplete records or
+recover their exact targets from authoritative replay data. A zero missing count
+alone is not proof of dataset correctness or experimental provenance.
+
 ```text
 Policy / provider / future learner
         │ AgentObservation + typed ActionRequest
