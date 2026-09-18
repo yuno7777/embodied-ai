@@ -31,9 +31,9 @@ def export_csv(records: list[dict[str, Any]], path: Path) -> Path:
 def world_model_transitions(records: list[dict[str, Any]], *, include_privileged_state: bool = False) -> list[dict[str, Any]]:
     """Build ordered `(observation, action, next_observation)` examples.
 
-    The default is safe for ordinary policy trajectories: it exports only exact
-    policy observations. Privileged snapshots are included solely when records
-    explicitly contain them and a researcher opts in.
+    Explicit post-action observations take precedence. Legacy rows may infer a
+    target only from an adjacent nonterminal transition in the same run; unknown
+    targets remain None. Privileged snapshots require researcher opt-in.
     """
     for record in records:
         validate_trajectory_record(record)
@@ -50,8 +50,21 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
         if previous != provenance:
             raise ValueError("one run cannot contain mixed experiment or world-manifest provenance")
     transitions: list[dict[str, Any]] = []
+    step_counts = Counter((record.get("run_id"), record.get("step")) for record in ordered)
     for index, record in enumerate(ordered):
         next_record = ordered[index + 1] if index + 1 < len(ordered) and ordered[index + 1].get("run_id") == record.get("run_id") else None
+        step = record.get("step")
+        if not (
+            next_record is not None
+            and isinstance(record.get("run_id"), str) and record["run_id"]
+            and not record.get("done") and record.get("terminal_reason") is None
+            and type(step) is int and step > 0
+            and type(next_record.get("step")) is int and next_record["step"] == step + 1
+            and step_counts[(record["run_id"], step)] == 1
+            and step_counts[(record["run_id"], step + 1)] == 1
+        ):
+            next_record = None
+        successor = next_record or {}
         transition = {
             "dataset_schema_version": record.get("dataset_schema_version", 1),
             "experiment_id": record.get("experiment_id"),
@@ -60,10 +73,7 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
             "step": record.get("step"),
             "observation_t": record.get("observation"),
             "action_t": record.get("chosen_action"),
-            # Runner records carry the exact post-action policy observation.
-            # Fall back to the following record for pre-v2 exports, preserving
-            # backward compatibility without corrupting new terminal steps.
-            "observation_t_plus_1": record.get("next_observation", (next_record or record).get("observation")),
+            "observation_t_plus_1": record.get("next_observation", successor.get("observation")),
             "reward_t": record.get("reward"),
             "reward_breakdown_t": record.get("reward_breakdown"),
             "terminated_t": bool(record.get("done")) and record.get("terminal_reason") not in {"timeout", "time_limit", "client_timeout", "token_budget_exhausted"},
@@ -72,7 +82,7 @@ def world_model_transitions(records: list[dict[str, Any]], *, include_privileged
         if include_privileged_state:
             transition["privileged_state_t"] = record.get("research_snapshot")
             transition["privileged_state_t_plus_1"] = record.get(
-                "next_research_snapshot", (next_record or record).get("research_snapshot")
+                "next_research_snapshot", successor.get("research_snapshot")
             )
         transitions.append(transition)
     return transitions
@@ -123,6 +133,7 @@ def summarize_world_model_dataset(records: list[dict[str, Any]]) -> dict[str, An
     return {
         "records": len(records),
         "transitions": len(transitions),
+        "transitions_missing_next_observation": sum(row["observation_t_plus_1"] is None for row in transitions),
         "runs": len({record.get("run_id") for record in records if record.get("run_id") is not None}),
         "action_counts": dict(sorted(action_counts.items())),
         "terminal_reasons": dict(sorted(terminal_reasons.items())),

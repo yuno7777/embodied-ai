@@ -71,3 +71,43 @@ def test_dataset_summary_flags_mixed_policy_state_modes_within_one_run():
 def test_jsonl_export_rejects_incomplete_versioned_trajectory_steps(tmp_path):
     with pytest.raises(ValueError):
         export_jsonl([{"trajectory_schema_version": 1}], tmp_path / "trajectory.jsonl")
+
+
+def test_legacy_targets_require_an_adjacent_step_and_preserve_unknown_final_state():
+    records = [
+        {"run_id": "a", "step": step, "observation": {"step": step - 1}, "research_snapshot": {"step": step - 1}}
+        for step in (1, 2, 4)
+    ]
+    transitions = world_model_transitions(list(reversed(records)), include_privileged_state=True)
+    assert transitions[0]["observation_t_plus_1"] == {"step": 1}
+    assert transitions[0]["privileged_state_t_plus_1"] == {"step": 1}
+    for row in transitions[1:]:
+        assert row["observation_t_plus_1"] is None
+        assert row["privileged_state_t_plus_1"] is None
+    assert summarize_world_model_dataset(records)["transitions_missing_next_observation"] == 2
+
+
+@pytest.mark.parametrize("updates", [
+    {"done": True}, {"terminal_reason": "dead"}, {"run_id": ""}, {"run_id": None}, {"step": True},
+])
+def test_legacy_fallback_does_not_cross_terminal_or_ambiguous_identity(updates):
+    first = {"run_id": "a", "step": 1, "observation": {"before": True}, **updates}
+    second = {"run_id": first["run_id"], "step": 2, "observation": {"after": True}}
+    assert world_model_transitions([first, second])[0]["observation_t_plus_1"] is None
+
+
+@pytest.mark.parametrize("duplicate_step", [1, 2])
+def test_legacy_fallback_does_not_guess_between_duplicate_steps(duplicate_step):
+    records = [{"run_id": "a", "step": step, "observation": {"step": step}} for step in (1, 2, duplicate_step)]
+    assert all(row["observation_t_plus_1"] is None for row in world_model_transitions(records))
+
+
+@pytest.mark.parametrize("target", [None, {}, {"exact": True}])
+def test_explicit_next_fields_are_never_replaced_by_legacy_fallback(target):
+    records = [
+        {"run_id": "a", "step": 1, "next_observation": target, "next_research_snapshot": target},
+        {"run_id": "a", "step": 2, "observation": {"inferred": True}, "research_snapshot": {"inferred": True}},
+    ]
+    row = world_model_transitions(records, include_privileged_state=True)[0]
+    assert row["observation_t_plus_1"] == target
+    assert row["privileged_state_t_plus_1"] == target
