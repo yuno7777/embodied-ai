@@ -1,5 +1,11 @@
 # Protocol v1
 
+Reward profiles supplied through `run --reward-config` must be complete JSON
+objects. They apply at episode creation only. Both the CLI and `run_remote` reject
+reward overrides combined with live-run resume or replay restore, which retain
+the original evaluator configuration. This prevents manifests from declaring an
+override that was never applied by Rust.
+
 Trajectory version dispatch is shared by JSONL export, experiment audit, summary,
 filtering, and world-model conversion. Only an absent `trajectory_schema_version`
 uses legacy handling. A declared version must be the integer `1`; unknown versions,
