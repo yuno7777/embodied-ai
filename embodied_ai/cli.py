@@ -50,6 +50,8 @@ def main():
     if args.cmd=='run':
         if not args.server_url: p.error('Runs require --server-url for the authoritative Rust simulation. Start .\\scripts\\dev.ps1 first.')
         if args.max_steps is not None and args.max_steps < 1: p.error('--max-steps must be positive')
+        if args.reward_config and (args.resume_run_id or args.restore_replay_id):
+            p.error('--reward-config applies only to new runs; resumed runs retain their original rewards')
         directory=args.output or ROOT/'data'/'runs'
         try:
             generator_config=json.loads(args.generator_config.read_text(encoding='utf-8')) if args.generator_config else None
@@ -57,7 +59,7 @@ def main():
         except (OSError, json.JSONDecodeError) as error:
             p.error(str(error))
         if generator_config is not None and not isinstance(generator_config,dict): p.error('--generator-config must contain a JSON object')
-        if reward_config is not None and not isinstance(reward_config,dict): p.error('--reward-config must contain a JSON object')
+        if args.reward_config and not isinstance(reward_config,dict): p.error('--reward-config must contain a JSON object')
         if reward_config is not None:
             try: reward_config=RewardConfig.model_validate(reward_config).model_dump(mode='json')
             except ValueError as error: p.error(f'--reward-config is invalid: {error}')

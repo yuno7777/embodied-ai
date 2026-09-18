@@ -62,8 +62,9 @@ def test_run_cli_forwards_and_pins_a_complete_reward_profile(monkeypatch, tmp_pa
     assert manifest["reward_config"] == rewards
 
 
-def test_run_cli_rejects_an_incomplete_reward_profile(monkeypatch, tmp_path):
-    config = tmp_path / "rewards.json"; config.write_text('{"baseline_per_step": -1}', encoding="utf-8")
+@pytest.mark.parametrize("content", ['{"baseline_per_step": -1}', 'null', '[]', 'true'])
+def test_run_cli_rejects_an_incomplete_reward_profile(monkeypatch, tmp_path, content):
+    config = tmp_path / "rewards.json"; config.write_text(content, encoding="utf-8")
     monkeypatch.setattr(sys, "argv", ["embodied-ai", "run", "--reward-config", str(config), "--server-url", "http://sim"])
     with pytest.raises(SystemExit) as error:
         cli.main()

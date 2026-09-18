@@ -63,6 +63,8 @@ class RustRunClient:
     def close(self) -> None: self.client.close()
 
 def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None, experiment_id: str | None = None, include_research_snapshots: bool = False, policy_state_mode: str = "reset") -> RemoteRunResult:
+    if reward_config is not None and (resume_run_id is not None or restore_replay_id is not None):
+        raise ValueError("reward_config applies only to new runs; resumed runs retain their original rewards")
     context=AgentContext(memory_mode=memory_mode, memory_window=memory_window); client=RustRunClient(base_url)
     run_id: str | None = None
     initialization_latency_ms: float | None = None
