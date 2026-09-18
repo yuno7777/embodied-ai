@@ -1,5 +1,12 @@
 # Protocol v1
 
+Trajectory analysis accepts contiguous segments beginning at any positive step,
+including exports from resumed runs. Summary `steps` counts records in the file;
+`first_step` and `last_step` retain simulation step numbers, and
+`includes_episode_start` states whether the segment begins at step one. Missing
+intermediate steps, duplicates, and reversed ordering remain validation errors.
+Segment statistics describe only the supplied records, not the unrecorded prefix.
+
 Reward profiles supplied through `run --reward-config` must be complete JSON
 objects. They apply at episode creation only. Both the CLI and `run_remote` reject
 reward overrides combined with live-run resume or replay restore, which retain
