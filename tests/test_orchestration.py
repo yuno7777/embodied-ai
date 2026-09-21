@@ -28,6 +28,20 @@ def test_context_does_not_contain_world_snapshot():
     context=AgentContext(); context.record({"visible_cells":[]},{"type":"wait"},[])
     assert "WorldSnapshot" not in SYSTEM_PROMPT and "visible_cells" not in context.payload()
 
+
+def test_context_records_only_sensor_perceived_action_facts():
+    context = AgentContext()
+    context.record(
+        {"visible_cells": []}, {"type": "wait"},
+        [
+            {"type": "NpcSpoke", "message": "The key is nearby."},
+            {"type": "PerturbationApplied", "message": "hidden hazard deactivated"},
+            {"type": "DoorOpened", "message": "The exit opens."},
+        ],
+        ["The key is nearby."],
+    )
+    assert context.payload()["known_facts"] == ["The key is nearby."]
+
 @pytest.mark.parametrize("window", [1, 3, 100])
 def test_context_window_retains_only_recent_actions_and_observations(window):
     context = AgentContext(memory_window=window)

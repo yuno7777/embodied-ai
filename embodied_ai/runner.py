@@ -162,7 +162,13 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                     records[-1]["research_snapshot"] = research_snapshot
                     records[-1]["next_research_snapshot"] = next_research_snapshot
                 records[-1]["provider_backoff_ms"] = list(getattr(provider, "last_backoff_ms", []))
-                context.record(observation,action.model_dump(exclude_none=True),result["events"]); observation=result["observation"]; research_snapshot = next_research_snapshot
+                perceived_messages = result["observation"].get("recent_events", [])
+                context.record(
+                    observation,
+                    action.model_dump(exclude_none=True),
+                    result["events"],
+                    perceived_messages if isinstance(perceived_messages, list) else [],
+                ); observation=result["observation"]; research_snapshot = next_research_snapshot
                 if result["done"]: return RemoteRunResult(run_id,result["terminal_reason"],steps,records,world_manifest=world_manifest,initialization_latency_ms=initialization_latency_ms)
         except Exception:
             if run_id is None:

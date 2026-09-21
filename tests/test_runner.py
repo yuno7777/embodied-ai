@@ -399,7 +399,7 @@ def test_trajectory_records_the_exact_compact_provider_context(monkeypatch):
         def record_decision(self, _run_id, _action, _summary, _provider, _model, _latency, _token_usage, metadata): recorded_metadata.append(metadata); return {}
         def step(self, _run_id, _action):
             self.steps += 1
-            return {"step_number": self.steps, "observation": {"allowed_action_types": ["wait"]}, "events": [{"type": "NpcSpoke", "message": "The exit key is in the locker."}], "reward": -1, "done": self.steps == 2, "terminal_reason": "escaped" if self.steps == 2 else None, "metrics": {}}
+            return {"step_number": self.steps, "observation": {"allowed_action_types": ["wait"], "recent_events": ["The exit key is in the locker."]}, "events": [{"type": "NpcSpoke", "message": "The exit key is in the locker."}, {"type": "PerturbationApplied", "message": "hidden hazard changed"}], "reward": -1, "done": self.steps == 2, "terminal_reason": "escaped" if self.steps == 2 else None, "metrics": {}}
         def close(self): pass
     class Provider:
         name = "context-test"
