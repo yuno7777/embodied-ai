@@ -73,11 +73,16 @@ def test_experiment_audit_binds_versioned_rows_to_scenario_and_seed(monkeypatch,
     # Versioned-row structural validation has its own schema tests. Stub it
     # here so this focused test can exercise the audit's manifest binding.
     monkeypatch.setattr("embodied_ai.experiments.validate_trajectory_record", lambda _record: None)
-    record = {"trajectory_schema_version": 1, "experiment_id": "experiment", "run_id": "run-1", "scenario_id": "survival_room", "scenario_version": 3, "seed": 9, "observation_mode": "normal", "world_manifest": None}
+    record = {"trajectory_schema_version": 1, "experiment_id": "experiment", "run_id": "run-1", "scenario_id": "survival_room", "scenario_version": 3, "seed": 9, "provider": "scripted", "model": None, "observation_mode": "normal", "world_manifest": None}
     receipt = audit_experiment_manifest(path, [record])
     assert receipt["scenario_provenance_checked"] is True and receipt["seed_provenance_checked"] is True
+    assert receipt["provider_provenance_checked"] is True and receipt["model_provenance_checked"] is True
     record["seed"] = 10
     with pytest.raises(ValueError, match="seed"):
+        audit_experiment_manifest(path, [record])
+    record["seed"] = 9
+    record["provider"] = "other"
+    with pytest.raises(ValueError, match="provider"):
         audit_experiment_manifest(path, [record])
 
 

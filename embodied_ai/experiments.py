@@ -170,6 +170,10 @@ def audit_experiment_manifest(
                 raise ValueError("trajectory scenario_version does not match its manifest")
             if record["seed"] != manifest.seed:
                 raise ValueError("trajectory seed does not match its manifest")
+            if record["provider"] != manifest.provider:
+                raise ValueError("trajectory provider does not match its manifest")
+            if record["model"] != manifest.model:
+                raise ValueError("trajectory model does not match its manifest")
     policy_state_mode = (
         manifest.agent_config.get("policy_state_mode")
         if isinstance(manifest.agent_config, dict) else None
@@ -189,6 +193,8 @@ def audit_experiment_manifest(
         "world_manifest_checked": True,
         "scenario_provenance_checked": all(record.get("trajectory_schema_version") == 1 for record in records),
         "seed_provenance_checked": all(record.get("trajectory_schema_version") == 1 for record in records),
+        "provider_provenance_checked": all(record.get("trajectory_schema_version") == 1 for record in records),
+        "model_provenance_checked": all(record.get("trajectory_schema_version") == 1 for record in records),
         "policy_state_mode_checked": policy_state_mode is not None,
         "reward_config_checked": manifest.reward_config is not None,
     })
