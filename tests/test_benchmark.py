@@ -168,6 +168,23 @@ def test_generalization_summary_reports_held_out_gap_and_uncertainty():
     assert topology_slice["episodes"] == 1 and topology_slice["success_rate"] == 0.0
     assert len(topology_slice["success_rate_wilson_95"]) == 2
     assert report["partitions"]["test"]["mechanics_breakdown"]["rooms:3|hazards:fire"]["episodes"] == 1
+    assert report["partitions"]["test"]["world_validation"]["manifested_episodes"] == 0
+    assert report["partitions"]["test"]["world_validation"]["all_manifested_solvable"] is None
+
+
+def test_generalization_summary_reports_rust_world_constraint_validation():
+    validation = {"geometry_valid": True, "spawn_valid": True, "required_key_reachable": True, "exit_reachable": True, "solvable": True}
+    rows = [
+        {"partition": "train", "outcome": "escaped", "world_validation": validation},
+        {"partition": "validation", "outcome": "timeout", "world_validation": validation},
+        {"partition": "test", "outcome": "timeout", "world_validation": validation},
+    ]
+    report = benchmark.summarize_generalization(rows)
+    assert report["partitions"]["train"]["world_validation"] == {
+        "manifested_episodes": 1, "geometry_valid_episodes": 1, "spawn_valid_episodes": 1,
+        "required_key_reachable_episodes": 1, "exit_reachable_episodes": 1,
+        "solvable_episodes": 1, "all_manifested_solvable": True,
+    }
 
 
 def test_generalization_provenance_rejects_episode_rows_that_disagree_with_the_report():
@@ -211,6 +228,16 @@ def test_generalization_provenance_rejects_episode_rows_that_disagree_with_the_r
         assert "without a shared" in str(error)
     else:
         raise AssertionError("mixed generator configuration sources were accepted")
+    invalid_validation_summary = {
+        **report,
+        "partitions": {**report["partitions"], "test": {**report["partitions"]["test"], "world_validation": {"manifested_episodes": 1}}},
+    }
+    try:
+        benchmark.validate_generalization_report(invalid_validation_summary)
+    except ValueError as error:
+        assert "world validation" in str(error)
+    else:
+        raise AssertionError("a fabricated world-validation summary was accepted")
 
 
 def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):

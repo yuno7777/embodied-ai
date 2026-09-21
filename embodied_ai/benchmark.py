@@ -104,6 +104,29 @@ def generated_mechanics_signature(world_manifest: dict[str, Any] | None) -> str 
     return f"rooms:{rooms}|hazards:{hazards}"
 
 
+def generated_world_validation(world_manifest: dict[str, Any] | None) -> dict[str, bool] | None:
+    """Extract Rust's procedural-world constraint result without inferring it."""
+    validation = world_manifest.get("validation") if isinstance(world_manifest, dict) else None
+    fields = ("geometry_valid", "spawn_valid", "required_key_reachable", "exit_reachable", "solvable")
+    if not isinstance(validation, dict) or any(type(validation.get(field)) is not bool for field in fields):
+        return None
+    return {field: validation[field] for field in fields}
+
+
+def world_validation_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate only explicit Rust validation evidence from generated worlds."""
+    validations = [row_validation for row in rows if (row_validation := row.get("world_validation")) is not None]
+    validation_fields = ("geometry_valid", "spawn_valid", "required_key_reachable", "exit_reachable", "solvable")
+    return {
+        "manifested_episodes": len(validations),
+        **{
+            f"{field}_episodes": sum(validation.get(field) is True for validation in validations)
+            for field in validation_fields
+        },
+        "all_manifested_solvable": all(validation["solvable"] for validation in validations) if validations else None,
+    }
+
+
 def generator_config_fingerprint(config: Mapping[str, Any] | None) -> str | None:
     """Produce a stable identity for a complete JSON generator configuration."""
     if config is None:
@@ -181,6 +204,7 @@ def summarize_generalization(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 signature: stratified_success_summary(items)
                 for signature, items in sorted(mechanics_groups.items())
             },
+            "world_validation": world_validation_summary(rows_for_partition),
         }
 
     partitions = {name: summarize(grouped[name]) for name in sorted(expected)}
@@ -270,6 +294,7 @@ def evaluate_generalization_remote(
             "hazard_kinds": generated_hazard_kinds(result.world_manifest),
             "room_count": generated_room_count(result.world_manifest),
             "mechanics_signature": generated_mechanics_signature(result.world_manifest),
+            "world_validation": generated_world_validation(result.world_manifest),
             "outcome": result.terminal_reason,
             "steps": result.steps,
             "total_reward": sum(record.get("reward", 0) for record in result.records if isinstance(record.get("reward", 0), (int, float))),
@@ -460,6 +485,12 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
             raise ValueError("generalization episodes must match the report observation_mode")
         if row.get("world_manifest") is not None and not isinstance(row.get("world_manifest"), dict):
             raise ValueError("generalization episode world_manifest must be an object or null")
+        validation = row.get("world_validation")
+        if validation is not None and (
+            not isinstance(validation, dict)
+            or any(type(validation.get(field)) is not bool for field in ("geometry_valid", "spawn_valid", "required_key_reachable", "exit_reachable", "solvable"))
+        ):
+            raise ValueError("generalization episode world_validation must be complete boolean evidence or null")
         expected_config = configs_by_partition.get(row["partition"]) if isinstance(configs_by_partition, dict) else shared_config
         if row.get("generator_config") != expected_config:
             raise ValueError("generalization episodes must match the report generator configuration")
@@ -472,6 +503,9 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
         successes = sum(row.get("outcome") == "escaped" for row in rows)
         if summary.get("episodes") != len(rows) or summary.get("success_rate") != successes / len(rows):
             raise ValueError("generalization partition summaries must match episode_results")
+        expected_validation = world_validation_summary(rows)
+        if "world_validation" in summary and summary.get("world_validation") != expected_validation:
+            raise ValueError("generalization world validation summary must match episode_results")
 
 
 def audit_generalization_report(report: dict[str, Any]) -> dict[str, Any]:

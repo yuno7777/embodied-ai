@@ -75,6 +75,12 @@ generator configuration, or one fingerprint per split when layouts differ.
 The audit receipt exposes these identities without requiring a researcher to
 visually compare JSON key order.
 
+Each generated episode retains Rust's world-validation result when its manifest
+is available. Split summaries expose how many worlds carried that evidence and
+how many passed geometry, spawn, key-reachability, exit-reachability, and full
+solvability checks. `audit-generalization` reconstructs this summary from the
+episode rows before accepting it.
+
 When two compatible reports both retain their per-episode rows,
 `compare-generalization` additionally groups the exact shared seeds into paired
 outcomes: both policies succeed, only the left succeeds, only the right
