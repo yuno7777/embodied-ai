@@ -40,7 +40,7 @@ def main():
     c=sub.add_parser('analyze'); c.add_argument('--trajectory',type=Path,required=True); c.add_argument('--output',type=Path)
     d=sub.add_parser('compare'); d.add_argument('--left',type=Path,required=True); d.add_argument('--right',type=Path,required=True); d.add_argument('--output',type=Path)
     generalization_compare=sub.add_parser('compare-generalization'); generalization_compare.add_argument('--left',type=Path,required=True); generalization_compare.add_argument('--right',type=Path,required=True); generalization_compare.add_argument('--output',type=Path)
-    generalization_audit=sub.add_parser('audit-generalization'); generalization_audit.add_argument('--report',type=Path,required=True); generalization_audit.add_argument('--output',type=Path)
+    generalization_audit=sub.add_parser('audit-generalization'); generalization_audit.add_argument('--report',type=Path,required=True); generalization_audit.add_argument('--checkpoint',type=Path,help='Verify a tabular checkpoint against checkpoint_fingerprint in the report.'); generalization_audit.add_argument('--output',type=Path)
     e=sub.add_parser('filter'); e.add_argument('--trajectory',type=Path,required=True); e.add_argument('--output',type=Path,required=True); e.add_argument('--action-type'); e.add_argument('--event-type'); e.add_argument('--valid-only',action='store_true'); e.add_argument('--csv',action='store_true')
     dataset_audit=sub.add_parser('audit-dataset'); dataset_audit.add_argument('--trajectory',type=Path,required=True); dataset_audit.add_argument('--output',type=Path)
     experiment_audit=sub.add_parser('audit-experiment'); experiment_audit.add_argument('--manifest',type=Path,required=True); experiment_audit.add_argument('--trajectory',type=Path); experiment_audit.add_argument('--output',type=Path)
@@ -182,7 +182,19 @@ def main():
         print(json.dumps(report,indent=2))
     elif args.cmd=='audit-generalization':
         try:
-            report=audit_generalization_report(json.loads(args.report.read_text(encoding='utf-8')))
+            source_report=json.loads(args.report.read_text(encoding='utf-8'))
+            report=audit_generalization_report(source_report)
+            if args.checkpoint is not None:
+                expected=source_report.get('checkpoint_fingerprint')
+                if not isinstance(expected,str) or not expected.startswith('sha256:'):
+                    raise ValueError('generalization report does not declare a tabular checkpoint fingerprint')
+                actual=checkpoint_fingerprint(args.checkpoint)
+                if actual != expected:
+                    raise ValueError('tabular checkpoint fingerprint does not match the generalization report')
+                report['checkpoint_fingerprint_checked']=True
+                report['checkpoint_fingerprint']=actual
+            else:
+                report['checkpoint_fingerprint_checked']=False
         except (OSError, ValueError, json.JSONDecodeError) as error:
             p.error(str(error))
         if args.output: args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(json.dumps(report,indent=2),encoding='utf-8')

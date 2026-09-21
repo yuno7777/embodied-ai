@@ -75,6 +75,10 @@ generator configuration, or one fingerprint per split when layouts differ.
 The audit receipt exposes these identities without requiring a researcher to
 visually compare JSON key order.
 
+For a tabular-generalization report, pass its checkpoint to
+`audit-generalization --checkpoint <path>` to verify that the file's SHA-256
+content fingerprint is the same policy artifact recorded by the report.
+
 Each generated episode retains Rust's world-validation result when its manifest
 is available. Split summaries expose how many worlds carried that evidence and
 how many passed geometry, spawn, key-reachability, exit-reachability, and full

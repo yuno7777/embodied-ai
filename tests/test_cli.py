@@ -157,6 +157,25 @@ def test_audit_generalization_cli_validates_a_single_report(monkeypatch, tmp_pat
     assert '"valid": true' in receipt and '"episode_provenance_checked": true' in receipt
 
 
+def test_audit_generalization_cli_verifies_a_tabular_checkpoint(monkeypatch, tmp_path, capsys):
+    checkpoint = tmp_path / 'policy.json'; checkpoint.write_text('checkpoint', encoding='utf-8')
+    rows = [
+        {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": None},
+        {"partition": "validation", "seed": 2, "outcome": "timeout", "observation_mode": "normal", "generator_config": None},
+        {"partition": "test", "seed": 3, "outcome": "timeout", "observation_mode": "normal", "generator_config": None},
+    ]
+    source = cli.summarize_generalization(rows) | {"engine_version": "rust-v1", "observation_mode": "normal", "world_distribution": {"train": [1], "validation": [2], "test": [3]}, "generator_config": None, "generator_configs_by_partition": None, "episode_results": rows, "checkpoint_fingerprint": cli.checkpoint_fingerprint(checkpoint)}
+    report_path = tmp_path / 'report.json'; report_path.write_text(json.dumps(source), encoding='utf-8')
+    monkeypatch.setattr(sys, 'argv', ['embodied-ai', 'audit-generalization', '--report', str(report_path), '--checkpoint', str(checkpoint)])
+    cli.main()
+    assert '"checkpoint_fingerprint_checked": true' in capsys.readouterr().out
+    checkpoint.write_text('changed', encoding='utf-8')
+    monkeypatch.setattr(sys, 'argv', ['embodied-ai', 'audit-generalization', '--report', str(report_path), '--checkpoint', str(checkpoint)])
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 2
+
+
 def test_generalize_cli_defaults_match_authoritative_seed_partitions(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setattr(
