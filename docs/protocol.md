@@ -15,10 +15,12 @@ override that was never applied by Rust.
 
 The headless `run` command reads authoritative replay metadata for either form
 of continuation before persisting its immutable experiment manifest. The
-manifest uses Rust's original scenario/version, seed, observation mode, world
-manifest, generator version, and reward profile instead of caller-supplied
-defaults. This also applies to an already-terminal live run, which has no new
-observation or trajectory row to infer provenance from.
+browser-facing agent service applies the same reconciliation after a Rust run is
+created. The finalized manifest uses Rust's scenario/version, seed, observation
+mode, world manifest, generator version, and reward profile instead of
+caller-supplied defaults. Headless reconciliation also applies to an
+already-terminal live run, which has no new observation or trajectory row to
+infer provenance from.
 
 Trajectory version dispatch is shared by JSONL export, experiment audit, summary,
 filtering, and world-model conversion. Only an absent `trajectory_schema_version`
@@ -59,7 +61,7 @@ Python trajectory exports record `agent_context` beside each observation. It is 
 
 Policy-local state is explicitly separate from that runner-owned context. `run_remote` and the `run` CLI record `policy_state_mode`: `reset` (the default) invokes the policy reset hook with the run seed; `preserve` leaves a reused policy instance intact for a deliberately labeled continual-memory experiment. Neither mode changes Rust world reset semantics, and each trajectory row plus experiment manifest records the selected mode.
 
-Persisted experiment manifests include a canonical fingerprint. `audit-experiment` verifies that fingerprint locally and can bind a JSONL trajectory to the exact experiment ID, observation mode, generated-world manifest, policy-state mode, and an explicitly pinned reward configuration. It also revalidates every `trajectory_schema_version: 1` row before accepting its provenance; unversioned legacy rows remain readable. The headless `run --reward-config <json-file>` path validates a complete profile before sending it to Rust, then pins the same profile into the manifest and trajectory. This is provenance validation, not a replay substitute: Rust replay reconstruction remains the authority for world-transition determinism.
+Persisted experiment manifests include a canonical fingerprint. `audit-experiment` verifies that fingerprint locally and can bind a JSONL trajectory to the exact experiment ID, observation mode, generated-world manifest, policy-state mode, and an explicitly pinned reward configuration. It also requires each `trajectory_schema_version: 1` row to match the manifest's scenario ID, scenario version, and seed before accepting its provenance; unversioned legacy rows remain readable. The headless `run --reward-config <json-file>` path validates a complete profile before sending it to Rust, then pins the same profile into the manifest and trajectory. This is provenance validation, not a replay substitute: Rust replay reconstruction remains the authority for world-transition determinism.
 
 For offline world-model research, the headless CLI may be invoked with `--include-research-snapshots`. That explicit local opt-in records a before/after `WorldSnapshot` pair beside each transition as `research_snapshot` and `next_research_snapshot`; it does not alter either the observation or provider context. Every new trajectory row carries `trajectory_schema_version: 1` and is validated before JSONL export: its observations must bracket the recorded action, terminal state must agree with its reason, and optional researcher snapshots must form a before/after pair. Rows from legacy unversioned exports remain readable for analysis. New rows also retain Rust's `simulation_time` and `reward_breakdown`, while world-model conversion exposes those components as `reward_breakdown_t`. Dataset conversion excludes the privileged pair unless its caller explicitly requests privileged state.
 

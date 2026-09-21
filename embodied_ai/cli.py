@@ -4,7 +4,7 @@ from pathlib import Path
 from .analysis import check_reproducibility, filter_trajectory, load_jsonl, summarize_trajectory, verify_replay
 from .benchmark import GeneralizationPlan, SeedPartition, audit_generalization_report, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, compare_generalization_reports, evaluate_generalization_remote, generator_config_fingerprint, summarize_generalization
 from .datasets import export_csv, export_jsonl, export_parquet, summarize_world_model_dataset
-from .experiments import ExperimentManifest, audit_experiment_manifest
+from .experiments import ExperimentManifest, audit_experiment_manifest, reconcile_manifest_provenance
 from .environment import EmbodiedEnv, EmbodiedEnvConfig
 from .learning import TabularQConfig, TabularQPolicy, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
 from .paths import ROOT
@@ -69,18 +69,7 @@ def main():
         manifest=ExperimentManifest(scenario_id=scenario_id or 'procedural',seed=args.seed,provider=args.provider,model=args.model,observation_mode=args.observation_mode,memory_mode=args.memory_mode,memory_window=args.memory_window,max_steps=args.max_steps,max_wall_seconds=args.max_wall_seconds,max_total_tokens=args.max_total_tokens,generator_version=1 if generated_world else None,generated_world=generated_world,reward_config=reward_config,agent_config={'include_research_snapshots':args.include_research_snapshots,'policy_state_mode':args.policy_state_mode})
         result=run_remote(provider_for(args.provider,args.seed,args.model),args.seed,args.server_url,args.memory_mode,args.max_steps,args.observation_mode,max_wall_seconds=args.max_wall_seconds,max_total_tokens=args.max_total_tokens,resume_run_id=args.resume_run_id,restore_replay_id=args.restore_replay_id,memory_window=args.memory_window,scenario_id=scenario_id,generated_world=generated_world,reward_config=reward_config,experiment_id=manifest.experiment_id,include_research_snapshots=args.include_research_snapshots,policy_state_mode=args.policy_state_mode)
         if result.provenance is not None:
-            authoritative = result.provenance
-            generated_manifest = authoritative["world_manifest"]
-            generator_version = generated_manifest.get("generator_version") if isinstance(generated_manifest, dict) else None
-            manifest=manifest.model_copy(update={
-                "scenario_id": authoritative["scenario_id"],
-                "scenario_version": authoritative["scenario_version"],
-                "seed": authoritative["seed"],
-                "observation_mode": authoritative["observation_mode"],
-                "generated_world": generated_manifest,
-                "generator_version": generator_version if type(generator_version) is int else None,
-                "reward_config": authoritative["reward_config"],
-            })
+            manifest=reconcile_manifest_provenance(manifest, result.provenance)
         elif result.world_manifest is not None:
             manifest=manifest.model_copy(update={"generated_world":result.world_manifest})
         manifest_path=manifest.persist(directory)

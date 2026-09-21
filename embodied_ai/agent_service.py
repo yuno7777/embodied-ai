@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .cli import provider_for
 from .datasets import export_jsonl, export_parquet
-from .experiments import ExperimentManifest
+from .experiments import ExperimentManifest, reconcile_manifest_provenance
 from .paths import ROOT
 from .runner import RemoteRunResult, run_remote
 
@@ -87,6 +87,9 @@ class AgentRunManager:
                     experiment_id=manifest.experiment_id,
                     policy_state_mode=request.policy_state_mode,
                 )
+                reconciled = reconcile_manifest_provenance(manifest, result.provenance)
+                if reconciled != manifest:
+                    manifest_path = reconciled.persist(self.output_directory)
                 self._finish(result, manifest_path)
             except Exception as error:  # surfaced to the local observer; no secret-bearing request data is retained
                 holder["error"] = "Provider orchestration failed: " + str(error)

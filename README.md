@@ -68,7 +68,7 @@ Open `http://localhost:3000`.
 
 The helper configures the local Windows Rust toolchain. It is the only simulation server; Python only orchestrates model decisions through the Rust HTTP API. With Terminal 3 running, choose a provider and observation mode in the observer and select **Start agent**. It returns the authoritative run ID immediately, while the provider continues independently and the Rust WebSocket streams the live simulation. Use **Start manual** for the human-control baseline.
 
-Every browser-launched provider run writes an immutable experiment manifest before rollout. Its trajectory records carry the same experiment ID, and the completed local-run status retains the manifest path even when a provider fails before emitting trajectory steps. The observer exposes that manifest as a download beside JSONL and Parquet exports.
+Every browser-launched provider run writes an immutable experiment manifest before rollout. After Rust creates the run, the agent service reconciles its scenario/version, seed, observation mode, generated-world manifest, generator version, and reward profile from authoritative metadata before it exposes the completed export. Its trajectory records carry the same experiment ID, and the completed local-run status retains the manifest path even when a provider fails before emitting trajectory steps. The observer exposes that manifest as a download beside JSONL and Parquet exports.
 
 ## Run policies and benchmarks
 
@@ -138,7 +138,7 @@ Start the Rust server before either command. Rust events are persisted as replay
 
 `audit-generalization` performs that provenance check on one report and emits a compact receipt containing its experimental conditions, canonical generator-config fingerprints, split counts, and whether episode-level evidence was checked. It is local and read-only; use it before comparing, archiving, or sharing a report.
 
-`audit-experiment` is the corresponding local, read-only check for one immutable experiment manifest. It first verifies the persisted fingerprint, then, when given a JSONL trajectory, requires every row to carry the same experiment ID, observation mode, generated-world manifest, and configured policy-state mode. New runner exports identify themselves as `trajectory_schema_version: 1` and are structurally validated before JSONL output. It rejects mixed run IDs or altered provenance instead of treating nearby-looking artifacts as one experiment.
+`audit-experiment` is the corresponding local, read-only check for one immutable experiment manifest. It first verifies the persisted fingerprint, then, when given a JSONL trajectory, requires every row to carry the same experiment ID, observation mode, generated-world manifest, and configured policy-state mode. Versioned runner rows must additionally match the manifest's scenario ID/version and seed. New runner exports identify themselves as `trajectory_schema_version: 1` and are structurally validated before JSONL output. It rejects mixed run IDs or altered provenance instead of treating nearby-looking artifacts as one experiment.
 
 `run --reward-config <path>` accepts one complete JSON reward profile and submits it to the Rust authority. The exact profile is pinned into the experiment manifest and copied to each trajectory row; `audit-experiment` verifies it when the manifest declares one. Use this for evaluator ablations, not as a substitute for changing world-transition rules.
 

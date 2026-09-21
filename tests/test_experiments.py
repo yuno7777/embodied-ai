@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from embodied_ai.experiments import ExperimentManifest, audit_experiment_manifest, load_experiment_manifest
+from embodied_ai.experiments import ExperimentManifest, audit_experiment_manifest, load_experiment_manifest, reconcile_manifest_provenance
 
 
 def test_manifest_fingerprint_excludes_run_identity_and_timestamp():
@@ -62,6 +62,33 @@ def test_experiment_audit_verifies_persisted_manifest_and_trajectory_provenance(
     assert receipt["valid"] is True
     assert receipt["trajectory_run_id"] == "run-1"
     assert receipt["world_manifest_checked"] is True
+
+
+def test_experiment_audit_binds_versioned_rows_to_scenario_and_seed(monkeypatch, tmp_path):
+    manifest = ExperimentManifest(
+        experiment_id="experiment", scenario_id="survival_room", scenario_version=3, seed=9,
+        provider="scripted", observation_mode="normal", memory_mode="none", memory_window=1,
+    )
+    path = manifest.persist(tmp_path)
+    # Versioned-row structural validation has its own schema tests. Stub it
+    # here so this focused test can exercise the audit's manifest binding.
+    monkeypatch.setattr("embodied_ai.experiments.validate_trajectory_record", lambda _record: None)
+    record = {"trajectory_schema_version": 1, "experiment_id": "experiment", "run_id": "run-1", "scenario_id": "survival_room", "scenario_version": 3, "seed": 9, "observation_mode": "normal", "world_manifest": None}
+    receipt = audit_experiment_manifest(path, [record])
+    assert receipt["scenario_provenance_checked"] is True and receipt["seed_provenance_checked"] is True
+    record["seed"] = 10
+    with pytest.raises(ValueError, match="seed"):
+        audit_experiment_manifest(path, [record])
+
+
+def test_manifest_reconciliation_revalidates_authoritative_metadata():
+    manifest = ExperimentManifest(scenario_id="survival_room", seed=7, provider="scripted", observation_mode="normal", memory_mode="none", memory_window=1)
+    provenance = {"scenario_id": "other_room", "scenario_version": 8, "seed": 91, "observation_mode": "noisy", "world_manifest": {"generator_version": 1}, "reward_config": {"baseline_per_step": -2}}
+    reconciled = reconcile_manifest_provenance(manifest, provenance)
+    assert reconciled.scenario_id == "other_room" and reconciled.seed == 91
+    assert reconciled.generator_version == 1 and reconciled.reward_config == {"baseline_per_step": -2}
+    with pytest.raises(ValueError, match="unexpected"):
+        reconcile_manifest_provenance(manifest, {"seed": 91})
 
 
 def test_experiment_audit_rejects_tampering_and_mismatched_trajectory_provenance(tmp_path):

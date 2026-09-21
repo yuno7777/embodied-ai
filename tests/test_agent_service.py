@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from embodied_ai.agent_service import AgentRunManager, AgentRunRequest
+from embodied_ai.experiments import load_experiment_manifest
 from embodied_ai.runner import RemoteRunResult
 
 
@@ -30,6 +31,24 @@ def test_agent_service_starts_a_provider_only_after_the_rust_run_exists(monkeypa
     assert isinstance(captured["experiment_id"], str)
     assert captured["policy_state_mode"] == "preserve"
     assert len(list(tmp_path.glob("*.experiment.json"))) == 1
+
+
+def test_agent_service_reconciles_manifest_from_rust_run_provenance(monkeypatch, tmp_path: Path):
+    def fake_run_remote(_provider, _seed, _url, _memory, _max_steps, _mode, on_created, _wall, _tokens, memory_window, **_kwargs):
+        on_created("authoritative-run")
+        return RemoteRunResult("authoritative-run", "escaped", 3, [], provenance={"scenario_id": "other_room", "scenario_version": 8, "seed": 91, "observation_mode": "noisy", "world_manifest": {"generator_version": 1}, "reward_config": {"baseline_per_step": -2}})
+
+    monkeypatch.setattr("embodied_ai.agent_service.run_remote", fake_run_remote)
+    manager = AgentRunManager("http://127.0.0.1:8080", tmp_path)
+    started = manager.start(AgentRunRequest(provider="scripted", seed=7))
+    while started["status"] == "running":
+        import time
+        time.sleep(.01)
+        started = manager.status("authoritative-run")
+    manifest_path = Path(started["exports"]["experiment_manifest"])
+    manifest = load_experiment_manifest(manifest_path)
+    assert manifest.scenario_id == "other_room" and manifest.scenario_version == 8
+    assert manifest.seed == 91 and manifest.observation_mode == "noisy"
 
 
 def test_agent_service_retains_manifest_export_without_trajectory_records(tmp_path: Path):

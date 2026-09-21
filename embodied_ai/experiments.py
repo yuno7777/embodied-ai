@@ -81,6 +81,41 @@ class ExperimentManifest(BaseModel):
         return path
 
 
+def reconcile_manifest_provenance(
+    manifest: ExperimentManifest, provenance: dict[str, Any] | None,
+) -> ExperimentManifest:
+    """Pin an experiment manifest to identity returned by the Rust authority.
+
+    A caller may supply defaults in order to start a run, but replay/create
+    metadata is the evidence for the episode that actually exists.  Revalidate
+    the complete result rather than using ``model_copy`` so malformed metadata
+    cannot become a persisted manifest.
+    """
+    if provenance is None:
+        return manifest
+    required = {
+        "scenario_id", "scenario_version", "seed", "observation_mode",
+        "world_manifest", "reward_config",
+    }
+    if set(provenance) != required:
+        raise ValueError("authoritative run provenance has unexpected fields")
+    world_manifest = provenance["world_manifest"]
+    generator_version = (
+        world_manifest.get("generator_version")
+        if isinstance(world_manifest, dict) else None
+    )
+    payload = manifest.model_dump(mode="json") | {
+        "scenario_id": provenance["scenario_id"],
+        "scenario_version": provenance["scenario_version"],
+        "seed": provenance["seed"],
+        "observation_mode": provenance["observation_mode"],
+        "generated_world": world_manifest,
+        "generator_version": generator_version if type(generator_version) is int else None,
+        "reward_config": provenance["reward_config"],
+    }
+    return ExperimentManifest.model_validate(payload)
+
+
 def load_experiment_manifest(path: Path) -> ExperimentManifest:
     """Load a persisted manifest only when its immutable fingerprint verifies."""
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -128,6 +163,13 @@ def audit_experiment_manifest(
             raise ValueError("trajectory observation_mode does not match its manifest")
         if record.get("world_manifest") != manifest.generated_world:
             raise ValueError("trajectory world_manifest does not match its manifest")
+        if record.get("trajectory_schema_version") == 1:
+            if record["scenario_id"] != manifest.scenario_id:
+                raise ValueError("trajectory scenario_id does not match its manifest")
+            if record["scenario_version"] != manifest.scenario_version:
+                raise ValueError("trajectory scenario_version does not match its manifest")
+            if record["seed"] != manifest.seed:
+                raise ValueError("trajectory seed does not match its manifest")
     policy_state_mode = (
         manifest.agent_config.get("policy_state_mode")
         if isinstance(manifest.agent_config, dict) else None
@@ -145,6 +187,8 @@ def audit_experiment_manifest(
         "trajectory_records": len(records),
         "trajectory_run_id": next(iter(run_ids), None),
         "world_manifest_checked": True,
+        "scenario_provenance_checked": all(record.get("trajectory_schema_version") == 1 for record in records),
+        "seed_provenance_checked": all(record.get("trajectory_schema_version") == 1 for record in records),
         "policy_state_mode_checked": policy_state_mode is not None,
         "reward_config_checked": manifest.reward_config is not None,
     })
