@@ -68,7 +68,8 @@ Generalization reports evaluate a fixed provider over explicit train, validation
 Provider generalization reports persist both the provider name and its explicit
 model identifier when supplied (for example, a Gemini model). Each episode row
 repeats those labels so exported evidence remains attributable after reports are
-split or filtered.
+split or filtered, and `audit-generalization` rejects a row that disagrees with
+the report-level provider or model label.
 
 Before interpreting a report, run `audit-generalization`. It rejects empty or
 overlapping seed splits, ambiguous shared versus per-split generator

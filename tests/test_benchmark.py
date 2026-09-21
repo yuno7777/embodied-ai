@@ -261,6 +261,23 @@ def test_generalization_provenance_rejects_episode_rows_that_disagree_with_the_r
         raise AssertionError("a fabricated world-validation summary was accepted")
 
 
+def test_generalization_provenance_binds_episode_provider_and_model():
+    rows = [
+        {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": None, "provider": "gemini", "model": "model-a"},
+        {"partition": "validation", "seed": 2, "outcome": "timeout", "observation_mode": "normal", "generator_config": None, "provider": "gemini", "model": "model-a"},
+        {"partition": "test", "seed": 3, "outcome": "timeout", "observation_mode": "normal", "generator_config": None, "provider": "gemini", "model": "model-a"},
+    ]
+    report = benchmark.summarize_generalization(rows) | {"engine_version": "rust-v1", "observation_mode": "normal", "provider": "gemini", "model": "model-a", "world_distribution": {"train": [1], "validation": [2], "test": [3]}, "generator_config": None, "generator_configs_by_partition": None, "episode_results": rows}
+    benchmark.validate_generalization_report(report)
+    tampered = {**report, "episode_results": [{**rows[0], "model": "model-b"}, *rows[1:]]}
+    try:
+        benchmark.validate_generalization_report(tampered)
+    except ValueError as error:
+        assert "report model" in str(error)
+    else:
+        raise AssertionError("episode model drift was accepted")
+
+
 def test_generalization_provenance_binds_validation_evidence_to_rust_manifest():
     validation = {"geometry_valid": True, "spawn_valid": True, "required_key_reachable": True, "exit_reachable": True, "solvable": True}
     rows = [

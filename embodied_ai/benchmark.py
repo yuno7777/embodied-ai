@@ -466,6 +466,11 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
         raise ValueError("generalization report requires report_version and engine_version")
     if report.get("observation_mode") not in {"minimal", "normal", "rich", "noisy", "oracle"}:
         raise ValueError("generalization report requires a supported observation_mode")
+    report_provider = report.get("provider")
+    if report_provider is not None and (not isinstance(report_provider, str) or not report_provider):
+        raise ValueError("generalization report provider must be non-empty text when supplied")
+    if "model" in report and report.get("model") is not None and not isinstance(report.get("model"), str):
+        raise ValueError("generalization report model must be text or null when supplied")
     distribution = report.get("world_distribution")
     if not isinstance(distribution, dict) or set(distribution) != {"train", "validation", "test"}:
         raise ValueError("generalization report requires train, validation, and test world_distribution")
@@ -506,6 +511,10 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
     for row in episodes:
         if not isinstance(row, dict) or row.get("observation_mode") != report["observation_mode"]:
             raise ValueError("generalization episodes must match the report observation_mode")
+        if report_provider is not None and row.get("provider") != report_provider:
+            raise ValueError("generalization episodes must match the report provider")
+        if "model" in report and row.get("model") != report.get("model"):
+            raise ValueError("generalization episodes must match the report model")
         if row.get("world_manifest") is not None and not isinstance(row.get("world_manifest"), dict):
             raise ValueError("generalization episode world_manifest must be an object or null")
         validation = row.get("world_validation")
