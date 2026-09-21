@@ -17,6 +17,17 @@ requiring complete prediction pairs must exclude these incomplete records or
 recover their exact targets from authoritative replay data. A zero missing count
 alone is not proof of dataset correctness or experimental provenance.
 
+## Resumed-run provenance
+
+New episodes record creation metadata from the authoritative create response.
+When a provider resumes a live run, the Python runner reads the authoritative
+replay metadata before producing new trajectory rows. When it restores a saved
+replay, the Rust restore response returns the same seed, scenario identity,
+observation mode, reward configuration, and generated-world manifest. The
+caller-provided seed and sensor arguments are therefore not allowed to relabel
+continued data. A replay missing this required metadata is rejected rather than
+exported with guessed provenance.
+
 ```text
 Policy / provider / future learner
         │ AgentObservation + typed ActionRequest
