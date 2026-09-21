@@ -6,7 +6,7 @@ from .benchmark import GeneralizationPlan, SeedPartition, audit_generalization_r
 from .datasets import export_csv, export_jsonl, export_parquet, summarize_world_model_dataset
 from .experiments import ExperimentManifest, audit_experiment_manifest, reconcile_manifest_provenance
 from .environment import EmbodiedEnv, EmbodiedEnvConfig
-from .learning import TabularQConfig, TabularQPolicy, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
+from .learning import TabularQConfig, TabularQPolicy, checkpoint_fingerprint, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
 from .paths import ROOT
 from .providers import CautiousProvider, ExplorerProvider, GeminiProvider, ScriptedProvider, RandomValidProvider, MockReasoningProvider
 from .runner import run_remote
@@ -117,22 +117,24 @@ def main():
         except (OSError, ValueError, json.JSONDecodeError) as error:
             p.error(str(error))
         checkpoint=policy.save(args.checkpoint)
-        manifest=ExperimentManifest(scenario_id='procedural',seed=args.seed_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={"config":generator_config} if generator_config is not None else {},agent_config={"algorithm":"tabular_q","checkpoint":str(checkpoint),"episodes":args.episodes,"learning_rate":args.learning_rate,"discount":args.discount,"epsilon":args.epsilon,"phase":"train"})
+        checkpoint_hash=checkpoint_fingerprint(checkpoint)
+        manifest=ExperimentManifest(scenario_id='procedural',seed=args.seed_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={"config":generator_config} if generator_config is not None else {},agent_config={"algorithm":"tabular_q","checkpoint":str(checkpoint),"checkpoint_fingerprint":checkpoint_hash,"episodes":args.episodes,"learning_rate":args.learning_rate,"discount":args.discount,"epsilon":args.epsilon,"phase":"train"})
         manifest_path=manifest.persist(checkpoint.parent)
-        print(json.dumps({"policy":"tabular_q","observation_mode":args.observation_mode,"episodes":len(episodes),"checkpoint":str(checkpoint),"experiment_manifest":str(manifest_path),"mean_reward":sum(item["total_reward"] for item in episodes)/len(episodes),"terminal_reasons":{reason:sum(item["terminal_reason"]==reason for item in episodes) for reason in sorted({item["terminal_reason"] for item in episodes})}},indent=2))
+        print(json.dumps({"policy":"tabular_q","observation_mode":args.observation_mode,"episodes":len(episodes),"checkpoint":str(checkpoint),"checkpoint_fingerprint":checkpoint_hash,"experiment_manifest":str(manifest_path),"mean_reward":sum(item["total_reward"] for item in episodes)/len(episodes),"terminal_reasons":{reason:sum(item["terminal_reason"]==reason for item in episodes) for reason in sorted({item["terminal_reason"] for item in episodes})}},indent=2))
     elif args.cmd=='evaluate-tabular':
         if not args.server_url: p.error('Tabular evaluation requires --server-url for the authoritative Rust simulation. Start .\\scripts\\dev.ps1 first.')
         try:
             generator_config=json.loads(args.generator_config.read_text(encoding='utf-8')) if args.generator_config else None
             if generator_config is not None and not isinstance(generator_config,dict): raise ValueError('--generator-config must contain a JSON object')
             policy=TabularQPolicy.load(args.checkpoint)
+            checkpoint_hash=checkpoint_fingerprint(args.checkpoint)
             seeds=list(range(args.seed_start,args.seed_start+args.episodes))
             episodes=evaluate_tabular_q(lambda: EmbodiedEnv(EmbodiedEnvConfig(server_url=args.server_url, observation_mode=args.observation_mode)),policy,seeds,args.max_steps,lambda seed: {"generated_world":{"seed":seed, **({"config":generator_config} if generator_config is not None else {})}})
         except (OSError, ValueError, json.JSONDecodeError) as error:
             p.error(str(error))
-        manifest=ExperimentManifest(scenario_id='procedural',seed=args.seed_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={"config":generator_config} if generator_config is not None else {},agent_config={"algorithm":"tabular_q","checkpoint":str(args.checkpoint),"episodes":args.episodes,"phase":"evaluate"})
+        manifest=ExperimentManifest(scenario_id='procedural',seed=args.seed_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={"config":generator_config} if generator_config is not None else {},agent_config={"algorithm":"tabular_q","checkpoint":str(args.checkpoint),"checkpoint_fingerprint":checkpoint_hash,"episodes":args.episodes,"phase":"evaluate"})
         manifest_path=manifest.persist(args.checkpoint.parent)
-        print(json.dumps({"policy":"tabular_q","observation_mode":args.observation_mode,"checkpoint":str(args.checkpoint),"experiment_manifest":str(manifest_path),"episodes":episodes,"success_rate":sum(item["terminal_reason"]=="escaped" for item in episodes)/len(episodes),"mean_reward":sum(item["total_reward"] for item in episodes)/len(episodes)},indent=2))
+        print(json.dumps({"policy":"tabular_q","observation_mode":args.observation_mode,"checkpoint":str(args.checkpoint),"checkpoint_fingerprint":checkpoint_hash,"experiment_manifest":str(manifest_path),"episodes":episodes,"success_rate":sum(item["terminal_reason"]=="escaped" for item in episodes)/len(episodes),"mean_reward":sum(item["total_reward"] for item in episodes)/len(episodes)},indent=2))
     elif args.cmd=='generalize-tabular':
         if not args.server_url: p.error('Tabular generalization requires --server-url for the authoritative Rust simulation. Start .\\scripts\\dev.ps1 first.')
         try:
@@ -146,7 +148,7 @@ def main():
             evaluated=evaluate_tabular_partitions(factory,policy,partitions,args.max_steps,options)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             p.error(str(error))
-        checkpoint=policy.save(args.checkpoint); args.output.mkdir(parents=True,exist_ok=True)
+        checkpoint=policy.save(args.checkpoint); checkpoint_hash=checkpoint_fingerprint(checkpoint); args.output.mkdir(parents=True,exist_ok=True)
         config_fingerprint=generator_config_fingerprint(generator_config)
         rows=[{
             'partition':partition, 'outcome':episode['terminal_reason'], 'observation_mode':args.observation_mode,
@@ -157,9 +159,9 @@ def main():
             'world_validation':generated_world_validation(episode.get('world_manifest')),
             **episode,
         } for partition,episodes in evaluated.items() for episode in episodes]
-        manifest=ExperimentManifest(scenario_id='procedural',seed=args.train_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={'config':generator_config} if generator_config is not None else {},world_distribution={name:tuple(seeds) for name,seeds in partitions.items()},agent_config={'algorithm':'tabular_q','checkpoint':str(checkpoint),'learning_rate':args.learning_rate,'discount':args.discount,'epsilon':args.epsilon,'phase':'train_validate_test'})
+        manifest=ExperimentManifest(scenario_id='procedural',seed=args.train_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={'config':generator_config} if generator_config is not None else {},world_distribution={name:tuple(seeds) for name,seeds in partitions.items()},agent_config={'algorithm':'tabular_q','checkpoint':str(checkpoint),'checkpoint_fingerprint':checkpoint_hash,'learning_rate':args.learning_rate,'discount':args.discount,'epsilon':args.epsilon,'phase':'train_validate_test'})
         manifest_path=manifest.persist(args.output)
-        report=summarize_generalization(rows) | {'experiment_id':manifest.experiment_id,'experiment_manifest':manifest_path.name,'checkpoint':str(checkpoint),'engine_version':'rust-v1','observation_mode':args.observation_mode,'world_distribution':partitions,'generator_config':generator_config,'generator_configs_by_partition':None,'generator_config_fingerprint':config_fingerprint,'generator_config_fingerprints_by_partition':None,'episode_results':rows}
+        report=summarize_generalization(rows) | {'experiment_id':manifest.experiment_id,'experiment_manifest':manifest_path.name,'checkpoint':str(checkpoint),'checkpoint_fingerprint':checkpoint_hash,'engine_version':'rust-v1','observation_mode':args.observation_mode,'world_distribution':partitions,'generator_config':generator_config,'generator_configs_by_partition':None,'generator_config_fingerprint':config_fingerprint,'generator_config_fingerprints_by_partition':None,'episode_results':rows}
         (args.output/'tabular_generalization_report.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n',encoding='utf-8'); export_jsonl(rows,args.output/'tabular_generalization_episodes.jsonl')
         print(json.dumps(report,indent=2))
     elif args.cmd=='analyze':

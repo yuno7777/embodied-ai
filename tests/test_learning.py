@@ -1,4 +1,4 @@
-from embodied_ai.learning import TabularQConfig, TabularQPolicy, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
+from embodied_ai.learning import TabularQConfig, TabularQPolicy, checkpoint_fingerprint, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
 from embodied_ai.schemas import ActionRequest
 
 
@@ -15,6 +15,9 @@ def test_tabular_q_uses_only_public_observation_and_updates_values(tmp_path):
     checkpoint = policy.save(tmp_path / "policy.json")
     loaded = TabularQPolicy.load(checkpoint, seed=2)
     assert loaded.q_values == policy.q_values
+    assert checkpoint_fingerprint(checkpoint).startswith("sha256:")
+    checkpoint.write_text("changed", encoding="utf-8")
+    assert checkpoint_fingerprint(checkpoint) != checkpoint_fingerprint(policy.save(tmp_path / "other-policy.json"))
 
 
 def test_tabular_q_training_uses_rl_style_environment_only():

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import random
 import time
 from dataclasses import asdict, dataclass
@@ -10,6 +11,11 @@ from typing import Any, Callable
 
 from .schemas import ActionRequest
 from .action_candidates import public_action_candidates
+
+
+def checkpoint_fingerprint(path: Path) -> str:
+    """Return a content identity for an immutable tabular policy artifact."""
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _episode_result(seed: int, step: int, total_reward: float, terminal_reason: str | None, info: dict[str, Any], control_elapsed_ms: float, reset_info: dict[str, Any] | None = None) -> dict[str, Any]:

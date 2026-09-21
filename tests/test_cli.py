@@ -270,6 +270,7 @@ def test_tabular_generalization_cli_trains_once_and_reports_disjoint_partitions(
     report = __import__('json').loads((tmp_path/'report'/'tabular_generalization_report.json').read_text())
     assert report['engine_version'] == 'rust-v1' and report['generator_config'] == {'min_rooms': 2, 'max_rooms': 2}
     assert report['generator_config_fingerprint'] == cli.generator_config_fingerprint({'min_rooms': 2, 'max_rooms': 2})
+    assert report['checkpoint_fingerprint'].startswith('sha256:')
     assert cli.audit_generalization_report(report)['valid'] is True
 
 
