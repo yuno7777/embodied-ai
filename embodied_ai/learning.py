@@ -99,31 +99,57 @@ class TabularQPolicy:
         except ValueError as error:
             raise ValueError("action is outside the tabular baseline action set") from error
 
-    def _values(self, state: str) -> list[float]:
-        values = self.q_values.setdefault(state, [0.0] * (len(self._actions) + 3))
-        values.extend([0.0] * (len(self._actions) + 3 - len(values)))
+    @property
+    def _action_count(self) -> int:
+        return len(self._actions) + 3
+
+    def _values(self, state: str, *, create: bool = True) -> list[float]:
+        values = self.q_values.get(state)
+        if values is None:
+            return [0.0] * self._action_count if not create else self.q_values.setdefault(state, [0.0] * self._action_count)
+        if not create:
+            return values
+        values.extend([0.0] * (self._action_count - len(values)))
         return values
 
     def _candidate_actions(self, observation: dict[str, Any]) -> list[tuple[int, ActionRequest]]:
         return [(self.action_index(action), action) for action in public_action_candidates(observation)]
 
-    def act(self, observation: dict[str, Any]) -> ActionRequest:
+    @staticmethod
+    def _value_at(values: list[float], index: int) -> float:
+        """Read older, short checkpoint vectors without modifying them."""
+        return values[index] if index < len(values) else 0.0
+
+    def _available_actions(self, observation: dict[str, Any]) -> list[tuple[int, ActionRequest]]:
         state = self.observation_key(observation)
         allowed = set(observation.get("allowed_action_types", []))
-        available = [(index, action) for index, action in self._candidate_actions(observation) if action.type in allowed]
+        return [(index, action) for index, action in self._candidate_actions(observation) if action.type in allowed]
+
+    def _greedy_action(self, observation: dict[str, Any]) -> ActionRequest:
+        state = self.observation_key(observation)
+        available = self._available_actions(observation)
+        if not available:
+            return ActionRequest(type="wait")
+        values = self._values(state, create=False)
+        best = max(self._value_at(values, index) for index, _ in available)
+        return next(action for index, action in available if self._value_at(values, index) == best)
+
+    def act(self, observation: dict[str, Any]) -> ActionRequest:
+        available = self._available_actions(observation)
         if not available:
             return ActionRequest(type="wait")
         if self.random.random() < self.config.epsilon:
             return self.random.choice(available)[1]
-        values = self._values(state)
-        best = max(values[index] for index, _ in available)
-        return next(action for index, action in available if values[index] == best)
+        return self._greedy_action(observation)
 
     def update(self, observation: dict[str, Any], action: ActionRequest, reward: float, next_observation: dict[str, Any], terminated: bool) -> None:
         state, next_state = self.observation_key(observation), self.observation_key(next_observation)
         index = self.action_index(action)
         values = self._values(state)
-        target = reward if terminated else reward + self.config.discount * max(self._values(next_state))
+        next_available = self._available_actions(next_observation)
+        next_values = self._values(next_state)
+        bootstrap = max((self._value_at(next_values, next_index) for next_index, _ in next_available), default=0.0)
+        target = reward if terminated else reward + self.config.discount * bootstrap
         values[index] += self.config.learning_rate * (target - values[index])
 
     def save(self, path: Path) -> Path:
@@ -164,7 +190,10 @@ def train_tabular_q(
                 next_observation, reward, terminated, truncated, info = environment.step(action)
                 last_info = info
                 done = terminated or truncated
-                policy.update(observation, action, reward, next_observation, done)
+                # Gymnasium semantics: a truncation is a boundary imposed by
+                # the runner, not a terminal state of the world, so Q-learning
+                # must retain its bootstrap target.
+                policy.update(observation, action, reward, next_observation, terminated=terminated)
                 observation, total_reward = next_observation, total_reward + reward
                 if done:
                     episodes.append(_episode_result(seed, step, total_reward, info.get("terminal_reason"), info, (time.perf_counter() - started) * 1000))
@@ -181,13 +210,9 @@ def evaluate_tabular_q(
     """Evaluate a frozen greedy checkpoint without mutating its Q-values."""
     if not seeds or max_steps < 1:
         raise ValueError("evaluation requires seeds and a positive max_steps")
-    original_epsilon = policy.config.epsilon
-    policy.config = TabularQConfig(policy.config.learning_rate, policy.config.discount, 0)
-    try:
-        episodes = []
-        with environment_factory() as environment:
-            for seed in seeds:
-                policy.reset(seed)
+    episodes = []
+    with environment_factory() as environment:
+        for seed in seeds:
                 if reset_options_for_seed:
                     observation, _ = environment.reset(seed=seed, options=reset_options_for_seed(seed))
                 else:
@@ -196,7 +221,7 @@ def evaluate_tabular_q(
                 last_info: dict[str, Any] = {}
                 started = time.perf_counter()
                 for step in range(1, max_steps + 1):
-                    next_observation, reward, terminated, truncated, info = environment.step(policy.act(observation))
+                    next_observation, reward, terminated, truncated, info = environment.step(policy._greedy_action(observation))
                     last_info = info
                     observation, total_reward = next_observation, total_reward + reward
                     if terminated or truncated:
@@ -204,9 +229,7 @@ def evaluate_tabular_q(
                         break
                 else:
                     episodes.append(_episode_result(seed, max_steps, total_reward, "evaluator_step_limit", last_info, (time.perf_counter() - started) * 1000))
-        return episodes
-    finally:
-        policy.config = TabularQConfig(policy.config.learning_rate, policy.config.discount, original_epsilon)
+    return episodes
 
 
 def evaluate_tabular_partitions(

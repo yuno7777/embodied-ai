@@ -1,4 +1,5 @@
 from embodied_ai.learning import TabularQConfig, TabularQPolicy, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
+from embodied_ai.schemas import ActionRequest
 
 
 def observation(health=100):
@@ -95,9 +96,57 @@ def test_tabular_q_evaluation_is_greedy_and_does_not_mutate_values():
         def step(self, _action): return observation(), 1, True, False, {"terminal_reason": "escaped"}
     policy = TabularQPolicy(TabularQConfig(epsilon=1), seed=1)
     policy.q_values[policy.observation_key(observation())] = [2, 0, 0, 0, 0, 0]
-    before = dict(policy.q_values)
+    before = {state: list(values) for state, values in policy.q_values.items()}
     assert evaluate_tabular_q(Environment, policy, [9])[0]["terminal_reason"] == "escaped"
     assert policy.config.epsilon == 1 and policy.q_values == before
+
+
+def test_tabular_q_evaluation_does_not_create_values_for_unseen_observations():
+    class Environment:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def reset(self, *, seed): return observation(25), {}
+        def step(self, _action): return observation(50), 1, True, False, {"terminal_reason": "escaped"}
+    policy = TabularQPolicy(TabularQConfig(epsilon=1), seed=1)
+    assert evaluate_tabular_q(Environment, policy, [9])[0]["terminal_reason"] == "escaped"
+    assert policy.q_values == {}
+
+
+def test_tabular_q_evaluation_reads_short_legacy_vectors_without_extending_them():
+    observed = observation()
+    observed["allowed_action_types"].append("pickup")
+    observed["visible_cells"][0]["entities"] = [{"id": "key", "type": "item"}]
+    policy = TabularQPolicy(TabularQConfig(epsilon=1), seed=1)
+    policy.q_values[policy.observation_key(observed)] = [0] * 6
+    before = {state: list(values) for state, values in policy.q_values.items()}
+    assert policy._greedy_action(observed).type == "move"
+    assert policy.q_values == before
+
+
+def test_tabular_q_bootstraps_truncations_using_only_available_next_actions():
+    policy = TabularQPolicy(TabularQConfig(learning_rate=1, discount=.5, epsilon=0), seed=1)
+    before, after = observation(), observation(75)
+    after["allowed_action_types"] = ["wait"]
+    before_key, after_key = policy.observation_key(before), policy.observation_key(after)
+    policy.q_values[after_key] = [999, 0, 0, 0, 0, 5, 0, 0, 0]
+    policy.update(before, ActionRequest(type="move", direction="north"), 1, after, terminated=False)
+    assert policy.q_values[before_key][0] == 3.5
+    policy.update(before, ActionRequest(type="move", direction="north"), 2, after, terminated=True)
+    assert policy.q_values[before_key][0] == 2
+
+
+def test_tabular_training_passes_truncation_as_nonterminal_to_q_update():
+    class Environment:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def reset(self, *, seed): return observation(), {}
+        def step(self, _action): return observation(75), 1, False, True, {"terminal_reason": "timeout"}
+    class Policy(TabularQPolicy):
+        def __init__(self): super().__init__(); self.terminated = []
+        def update(self, *args, **kwargs): self.terminated.append(kwargs["terminated"])
+    policy = Policy()
+    train_tabular_q(Environment, policy, [1])
+    assert policy.terminated == [False]
 
 
 def test_tabular_partition_evaluation_keeps_distributions_disjoint_and_frozen():
