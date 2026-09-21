@@ -103,12 +103,13 @@ def test_generalization_comparison_requires_matching_conditions_and_reports_delt
     base = {"report_version": 1, "engine_version": "rust-v1", "observation_mode": "normal", "world_distribution": {"train": [0], "validation": [8000], "test": [9000]}, "generator_config": None, "generator_configs_by_partition": None, "generalization_gap": {"train_minus_validation_success_rate": .2, "train_minus_test_success_rate": .3}, "partitions": {name: {"success_rate": .5, "mean_episode_reward": 1} for name in ("train", "validation", "test")}}
     left_partitions = {**base["partitions"], "test": {"success_rate": .5, "mean_episode_reward": 1, "hazard_kind_breakdown": {"fire": {"episodes": 1, "success_rate": 0}}, "room_count_breakdown": {"3": {"episodes": 1, "success_rate": 0}}, "mechanics_breakdown": {"rooms:3|hazards:fire": {"episodes": 1, "success_rate": 0}}}}
     right = {**base, "experiment_id": "right", "generalization_gap": {"train_minus_validation_success_rate": .1, "train_minus_test_success_rate": .4}, "partitions": {**left_partitions, "test": {"success_rate": .75, "mean_episode_reward": 3, "hazard_kind_breakdown": {"fire": {"episodes": 1, "success_rate": 1}}, "room_count_breakdown": {"3": {"episodes": 1, "success_rate": 1}}, "mechanics_breakdown": {"rooms:3|hazards:fire": {"episodes": 1, "success_rate": 1}}}}}
-    result = benchmark.compare_generalization_reports({**base, "experiment_id": "left", "partitions": left_partitions}, right)
+    result = benchmark.compare_generalization_reports({**base, "experiment_id": "left", "provider": "scripted", "model": None, "partitions": left_partitions}, {**right, "provider": "gemini", "model": "gemini-test-model"})
     assert result["partitions"]["test"]["success_rate_delta"] == .25
     assert round(result["generalization_gap"]["train_minus_test_success_rate_delta"], 6) == .1
     assert result["partitions"]["test"]["hazard_kind_breakdown"]["fire"]["success_rate_delta"] == 1
     assert result["partitions"]["test"]["room_count_breakdown"]["3"]["success_rate_delta"] == 1
     assert result["partitions"]["test"]["mechanics_breakdown"]["rooms:3|hazards:fire"]["success_rate_delta"] == 1
+    assert result["left_provider"] == "scripted" and result["right_model"] == "gemini-test-model"
     try:
         benchmark.compare_generalization_reports(base, {**right, "observation_mode": "oracle"})
     except ValueError as error:

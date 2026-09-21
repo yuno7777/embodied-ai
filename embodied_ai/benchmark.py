@@ -677,6 +677,8 @@ def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) 
     return {
         "engine_version": left.get("engine_version"), "observation_mode": left.get("observation_mode"),
         "left_experiment_id": left.get("experiment_id"), "right_experiment_id": right.get("experiment_id"),
+        "left_provider": left.get("provider"), "left_model": left.get("model"),
+        "right_provider": right.get("provider"), "right_model": right.get("model"),
         "partitions": {name: {**{f"{metric}_delta": delta(left_partitions[name].get(metric), right_partitions[name].get(metric)) for metric in metrics}, "hazard_kind_breakdown": hazard_deltas(name), "room_count_breakdown": room_count_deltas(name), "mechanics_breakdown": mechanics_deltas(name)} for name in sorted(expected)},
         "generalization_gap": {key + "_delta": delta(left.get("generalization_gap", {}).get(key), right.get("generalization_gap", {}).get(key)) for key in ("train_minus_validation_success_rate", "train_minus_test_success_rate")},
         "paired_episode_comparison": paired_episode_comparison(),
