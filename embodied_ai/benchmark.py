@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 import json
+from math import comb
 from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
 from dataclasses import dataclass
@@ -66,6 +67,23 @@ def wilson_interval(successes: int, total: int, z: float = 1.96) -> tuple[float,
     center = (proportion + z * z / (2 * total)) / denominator
     margin = z * ((proportion * (1 - proportion) / total + z * z / (4 * total * total)) ** 0.5) / denominator
     return (center - margin, center + margin)
+
+
+def paired_success_exact_p_value(left_only_success: int, right_only_success: int) -> float:
+    """Two-sided exact binomial p-value for paired binary outcomes.
+
+    Only discordant pairs contribute. Under the null, either policy is equally
+    likely to be the successful one for each such world. This is an exact
+    descriptive test for a fixed paired-seed evaluation, not a replacement for
+    repeated independent studies.
+    """
+    if any(type(value) is not int or value < 0 for value in (left_only_success, right_only_success)):
+        raise ValueError("paired success counts must be non-negative integers")
+    discordant = left_only_success + right_only_success
+    if discordant == 0:
+        return 1.0
+    tail = sum(comb(discordant, successes) for successes in range(min(left_only_success, right_only_success) + 1))
+    return min(1.0, 2 * tail / (2 ** discordant))
 
 
 def built_in_world_partition(seed: int) -> str | None:
@@ -610,6 +628,8 @@ def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) 
                 "right_only_success": right_only_success,
                 "neither_success": neither_success,
                 "paired_success_rate_delta": (right_only_success - left_only_success) / len(pairs),
+                "discordant_pairs": left_only_success + right_only_success,
+                "paired_success_exact_p_value": paired_success_exact_p_value(left_only_success, right_only_success),
                 "world_manifests_checked": manifests_available,
             }
         return comparisons

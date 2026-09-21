@@ -88,4 +88,7 @@ succeeds, or neither succeeds. This is descriptive paired evidence for the
 fixed seed study, not a claim of statistical significance. When both reports
 retain Rust-generated world manifests, comparison also requires the manifest to
 match for every paired seed; it will not call different generated worlds a
-policy difference.
+policy difference. For each split it also reports the exact two-sided binomial
+p-value based only on discordant paired outcomes. Interpret that as a compact
+fixed-seed comparison statistic, not proof of a general capability difference;
+use repeated studies for stronger claims.

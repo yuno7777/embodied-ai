@@ -28,6 +28,18 @@ def test_generator_config_fingerprint_is_canonical_and_sensitive_to_values():
     assert benchmark.generator_config_fingerprint(None) is None
 
 
+def test_paired_success_exact_p_value_uses_only_discordant_worlds():
+    assert benchmark.paired_success_exact_p_value(0, 0) == 1.0
+    assert benchmark.paired_success_exact_p_value(4, 0) == .125
+    assert benchmark.paired_success_exact_p_value(3, 1) == .625
+    try:
+        benchmark.paired_success_exact_p_value(-1, 0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("negative paired-success counts were accepted")
+
+
 def test_benchmark_slices_keep_events_and_decisions_separate():
     events, decisions = benchmark.benchmark_slices([{
         "run_id": "r", "scenario_id": "s", "scenario_version": 1, "seed": 2, "step": 3,
@@ -113,6 +125,7 @@ def test_generalization_comparison_reports_paired_seed_outcomes():
     assert result["paired_episode_comparison"]["test"] == {
         "episodes": 1, "both_success": 0, "left_only_success": 0,
         "right_only_success": 1, "neither_success": 0, "paired_success_rate_delta": 1.0,
+        "discordant_pairs": 1, "paired_success_exact_p_value": 1.0,
         "world_manifests_checked": False,
     }
 
