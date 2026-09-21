@@ -21,6 +21,19 @@ def test_generalization_provider_factory_forwards_an_explicit_gemini_model(monke
     assert isinstance(provider, Gemini) and provider.model == "gemini-test-model"
 
 
+def test_generalization_resolves_and_restricts_provider_models(monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "configured-model")
+    assert benchmark.effective_provider_model("gemini", None) == "configured-model"
+    assert benchmark.effective_provider_model("gemini", "explicit-model") == "explicit-model"
+    assert benchmark.effective_provider_model("scripted", None) is None
+    try:
+        benchmark.effective_provider_model("scripted", "not-applicable")
+    except ValueError as error:
+        assert "only for the gemini" in str(error)
+    else:
+        raise AssertionError("a model was accepted for a non-model provider")
+
+
 def test_benchmark_provider_factory_rejects_unknown_provider():
     try:
         benchmark.provider_for("unknown", 7)

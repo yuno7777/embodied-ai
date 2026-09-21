@@ -200,6 +200,13 @@ def test_generalize_cli_forwards_provider_model(monkeypatch, tmp_path):
     assert captured["model"] == "gemini-test-model"
 
 
+def test_generalize_cli_rejects_a_model_for_non_model_provider(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "generalize", "--provider", "scripted", "--model", "not-applicable", "--server-url", "http://sim", "--output", str(tmp_path)])
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 2
+
+
 def test_generalize_cli_forwards_per_partition_generator_configs(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setattr(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import os
 from math import comb
 from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
@@ -156,6 +157,17 @@ def generator_config_fingerprint(config: Mapping[str, Any] | None) -> str | None
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
+def effective_provider_model(provider_name: str, model: str | None) -> str | None:
+    """Resolve the model identity that will actually be used by a provider."""
+    if model is not None and (not isinstance(model, str) or not model.strip()):
+        raise ValueError("model must be non-empty text when supplied")
+    if provider_name != "gemini":
+        if model is not None:
+            raise ValueError("--model is supported only for the gemini provider")
+        return None
+    return model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+
 def stratified_success_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Return an auditable binary-success slice with the same interval as a split."""
     successes = sum(row.get("outcome") == "escaped" for row in rows)
@@ -254,6 +266,7 @@ def evaluate_generalization_remote(
         raise ValueError("unsupported observation mode")
     if generator_config is not None and generator_configs_by_partition is not None:
         raise ValueError("choose either one generator config or configs by partition")
+    effective_model = effective_provider_model(provider_name, model)
     expected_partitions = {"train", "validation", "test"}
     if generator_configs_by_partition is not None:
         if set(generator_configs_by_partition) != expected_partitions:
@@ -276,7 +289,7 @@ def evaluate_generalization_remote(
         scenario_id="procedural",
         seed=plan.train.seeds[0],
         provider=provider_name,
-        model=model,
+        model=effective_model,
         observation_mode=observation_mode,
         memory_mode="none",
         memory_window=1,
@@ -303,7 +316,7 @@ def evaluate_generalization_remote(
         run_kwargs = {"generated_world": generated_world}
         if observation_mode != "normal":
             run_kwargs["observation_mode"] = observation_mode
-        result = run_remote(provider_for(provider_name, seed, model), seed, base_url, **run_kwargs)
+        result = run_remote(provider_for(provider_name, seed, effective_model), seed, base_url, **run_kwargs)
         final = result.records[-1] if result.records else {}
         metrics = final.get("metrics", {}) if isinstance(final.get("metrics"), dict) else {}
         return {
@@ -316,7 +329,7 @@ def evaluate_generalization_remote(
             "mechanics_signature": generated_mechanics_signature(result.world_manifest),
             "world_validation": generated_world_validation(result.world_manifest),
             "provider": provider_name,
-            "model": model,
+            "model": effective_model,
             "outcome": result.terminal_reason,
             "steps": result.steps,
             "total_reward": sum(record.get("reward", 0) for record in result.records if isinstance(record.get("reward", 0), (int, float))),
@@ -337,7 +350,7 @@ def evaluate_generalization_remote(
         "experiment_manifest": manifest_path.name,
         "experiment_fingerprint": manifest.fingerprint(),
         "provider": provider_name,
-        "model": model,
+        "model": effective_model,
         "engine_version": "rust-v1",
         "observation_mode": observation_mode,
         "world_distribution": plan.as_dict(),

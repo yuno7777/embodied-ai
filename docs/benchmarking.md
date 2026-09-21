@@ -66,10 +66,12 @@ These measurements exclude HTTP, rendering, disk persistence, and provider laten
 Generalization reports evaluate a fixed provider over explicit train, validation, and test seed lists. Treat the generator configuration and observation mode as experimental inputs, not presentation settings: both are persisted in the immutable experiment manifest and report. Episode exports capture the actual Rust-generated room count and hazard families from each world manifest; split summaries and compatible-report comparisons stratify success rates by each mechanic and by their joint signature. Do not compare a restricted-perception result against an `oracle` result as if they measured the same task.
 
 Provider generalization reports persist both the provider name and its explicit
-model identifier when supplied (for example, a Gemini model). Each episode row
-repeats those labels so exported evidence remains attributable after reports are
-split or filtered, and `audit-generalization` rejects a row that disagrees with
-the report-level provider or model label.
+model identifier when supplied (for example, a Gemini model). For Gemini, an
+omitted flag records the configured `GEMINI_MODEL` value or the provider's
+`gemini-2.5-flash` default; non-model providers reject `--model`. Each episode
+row repeats those labels so exported evidence remains attributable after reports
+are split or filtered, and `audit-generalization` rejects a row that disagrees
+with the report-level provider or model label.
 
 Before interpreting a report, run `audit-generalization`. It rejects empty or
 overlapping seed splits, ambiguous shared versus per-split generator
