@@ -105,6 +105,7 @@ python -m embodied_ai.cli benchmark-scale --provider random_valid --runs 64 --wo
 python -m embodied_ai.cli generalize --provider scripted --train-start 0 --train-count 20 --validation-start 8000 --validation-count 10 --test-start 9000 --test-count 10 --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli generalize --provider cautious --train-generator-config configs/generator/two-room-v1.json --validation-generator-config configs/generator/three-room-v1.json --test-generator-config configs/generator/three-room-v1.json --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli generalize --provider cautious --observation-mode noisy --server-url http://127.0.0.1:8080
+python -m embodied_ai.cli generalize --provider gemini --model YOUR_GEMINI_MODEL --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli audit-generalization --report data/exports/generalization/generalization_report.json
 python -m embodied_ai.cli audit-generalization --report data/exports/tabular-generalization/tabular_generalization_report.json --checkpoint data/checkpoints/tabular_q_generalization.json
 python -m embodied_ai.cli audit-dataset --trajectory data/runs/YOUR_RUN.trajectory.jsonl

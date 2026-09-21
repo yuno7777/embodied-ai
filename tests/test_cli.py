@@ -181,7 +181,7 @@ def test_generalize_cli_defaults_match_authoritative_seed_partitions(monkeypatch
     monkeypatch.setattr(
         cli,
         "evaluate_generalization_remote",
-        lambda plan, *_args: (captured.update(plan.as_dict()) or {"ok": True}),
+        lambda plan, *_args, **_kwargs: (captured.update(plan.as_dict()) or {"ok": True}),
     )
     monkeypatch.setattr(
         sys,
@@ -190,6 +190,14 @@ def test_generalize_cli_defaults_match_authoritative_seed_partitions(monkeypatch
     )
     cli.main()
     assert captured == {"train": [0, 1, 2, 3, 4], "validation": [8000, 8001], "test": [9000, 9001]}
+
+
+def test_generalize_cli_forwards_provider_model(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(cli, "evaluate_generalization_remote", lambda *_args, **kwargs: (captured.update(kwargs) or {"ok": True}))
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "generalize", "--provider", "gemini", "--model", "gemini-test-model", "--server-url", "http://sim", "--output", str(tmp_path)])
+    cli.main()
+    assert captured["model"] == "gemini-test-model"
 
 
 def test_generalize_cli_forwards_per_partition_generator_configs(monkeypatch, tmp_path):

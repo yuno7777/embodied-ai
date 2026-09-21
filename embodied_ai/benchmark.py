@@ -242,6 +242,7 @@ def evaluate_generalization_remote(
     base_url: str,
     provider_name: str = "scripted",
     concurrency: int = 1,
+    model: str | None = None,
     generator_config: Mapping[str, Any] | None = None,
     generator_configs_by_partition: Mapping[str, Mapping[str, Any]] | None = None,
     observation_mode: str = "normal",
@@ -275,6 +276,7 @@ def evaluate_generalization_remote(
         scenario_id="procedural",
         seed=plan.train.seeds[0],
         provider=provider_name,
+        model=model,
         observation_mode=observation_mode,
         memory_mode="none",
         memory_window=1,
@@ -301,7 +303,7 @@ def evaluate_generalization_remote(
         run_kwargs = {"generated_world": generated_world}
         if observation_mode != "normal":
             run_kwargs["observation_mode"] = observation_mode
-        result = run_remote(provider_for(provider_name, seed), seed, base_url, **run_kwargs)
+        result = run_remote(provider_for(provider_name, seed, model), seed, base_url, **run_kwargs)
         final = result.records[-1] if result.records else {}
         metrics = final.get("metrics", {}) if isinstance(final.get("metrics"), dict) else {}
         return {
@@ -313,6 +315,8 @@ def evaluate_generalization_remote(
             "room_count": generated_room_count(result.world_manifest),
             "mechanics_signature": generated_mechanics_signature(result.world_manifest),
             "world_validation": generated_world_validation(result.world_manifest),
+            "provider": provider_name,
+            "model": model,
             "outcome": result.terminal_reason,
             "steps": result.steps,
             "total_reward": sum(record.get("reward", 0) for record in result.records if isinstance(record.get("reward", 0), (int, float))),
@@ -333,6 +337,7 @@ def evaluate_generalization_remote(
         "experiment_manifest": manifest_path.name,
         "experiment_fingerprint": manifest.fingerprint(),
         "provider": provider_name,
+        "model": model,
         "engine_version": "rust-v1",
         "observation_mode": observation_mode,
         "world_distribution": plan.as_dict(),
@@ -346,14 +351,14 @@ def evaluate_generalization_remote(
     export_jsonl(rows, output / "generalization_episodes.jsonl")
     return report
 
-def provider_for(name: str, seed: int):
+def provider_for(name: str, seed: int, model: str | None = None):
     providers = {
         "scripted": ScriptedProvider,
         "mock_reasoning": MockReasoningProvider,
         "random_valid": lambda: RandomValidProvider(seed),
         "cautious": CautiousProvider,
         "explorer": ExplorerProvider,
-        "gemini": GeminiProvider,
+        "gemini": lambda: GeminiProvider(model=model),
     }
     try:
         return providers[name]()

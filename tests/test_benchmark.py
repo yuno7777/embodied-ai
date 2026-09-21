@@ -13,6 +13,14 @@ def test_benchmark_provider_factory_preserves_selected_provider():
     assert isinstance(benchmark.provider_for("explorer", 7), ExplorerProvider)
 
 
+def test_generalization_provider_factory_forwards_an_explicit_gemini_model(monkeypatch):
+    class Gemini:
+        def __init__(self, model): self.model = model
+    monkeypatch.setattr(benchmark, "GeminiProvider", Gemini)
+    provider = benchmark.provider_for("gemini", 7, "gemini-test-model")
+    assert isinstance(provider, Gemini) and provider.model == "gemini-test-model"
+
+
 def test_benchmark_provider_factory_rejects_unknown_provider():
     try:
         benchmark.provider_for("unknown", 7)
