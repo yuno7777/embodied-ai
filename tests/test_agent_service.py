@@ -43,8 +43,9 @@ def test_agent_service_retains_manifest_export_without_trajectory_records(tmp_pa
 def test_agent_service_retains_manifest_alongside_trajectory_exports(monkeypatch, tmp_path: Path):
     manifest = tmp_path / "experiment.experiment.json"
     manifest.write_text("{}", encoding="utf-8")
-    jsonl = tmp_path / "authoritative-run.jsonl"
-    monkeypatch.setattr("embodied_ai.agent_service.export_jsonl", lambda _records, _path: jsonl)
+    jsonl = tmp_path / "authoritative-run.trajectory.jsonl"
+    received_paths = []
+    monkeypatch.setattr("embodied_ai.agent_service.export_jsonl", lambda _records, path: (received_paths.append(path) or jsonl))
     monkeypatch.setattr("embodied_ai.agent_service.export_parquet", lambda _records, _path: _path)
     record = {"observation": {}, "next_observation": {}, "agent_context": {}, "agent_metadata": None, "events": [], "chosen_action": {"type": "wait"}, "metrics": {}}
     manager = AgentRunManager("http://127.0.0.1:8080", tmp_path)
@@ -54,6 +55,7 @@ def test_agent_service_retains_manifest_alongside_trajectory_exports(monkeypatch
         "jsonl": str(jsonl),
         "parquet": str(tmp_path / "authoritative-run.parquet"),
     }
+    assert received_paths == [jsonl]
 
 
 def test_agent_export_downloads_cannot_escape_the_configured_output_directory(tmp_path: Path):

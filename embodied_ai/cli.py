@@ -71,7 +71,7 @@ def main():
         if result.world_manifest is not None:
             manifest=manifest.model_copy(update={"generated_world":result.world_manifest})
         manifest_path=manifest.persist(directory)
-        jsonl=export_jsonl(result.records,directory/f'{result.run_id}.jsonl')
+        jsonl=export_jsonl(result.records,directory/f'{result.run_id}.trajectory.jsonl')
         export_parquet([{**record,"observation":json.dumps(record["observation"]),"next_observation":json.dumps(record.get("next_observation")),"research_snapshot":json.dumps(record.get("research_snapshot")),"next_research_snapshot":json.dumps(record.get("next_research_snapshot")),"agent_context":json.dumps(record["agent_context"]),"agent_metadata":json.dumps(record.get("agent_metadata")),"events":json.dumps(record["events"]),"chosen_action":json.dumps(record["chosen_action"]),"metrics":json.dumps(record["metrics"])} for record in result.records],directory/f'{result.run_id}.parquet')
         print(json.dumps({"run_id":result.run_id,"experiment_id":manifest.experiment_id,"experiment_manifest":str(manifest_path),"outcome":result.terminal_reason,"stop_detail":result.stop_detail,"steps":result.steps,"events":sum(len(record["events"]) for record in result.records),"jsonl":str(jsonl)}))
     elif args.cmd=='benchmark':

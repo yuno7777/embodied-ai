@@ -60,6 +60,7 @@ try {
         }
     }
     $trajectoryRecord = Get-Content $run.jsonl | Select-Object -Last 1 | ConvertFrom-Json
+    if (-not $run.jsonl.EndsWith('.trajectory.jsonl')) { throw 'Python trajectory export must not reuse the Rust event-log filename.' }
     if ($trajectoryRecord.reward_breakdown -eq $null -or $trajectoryRecord.simulation_time -eq $null) {
         throw 'Trajectory did not retain authoritative reward components and simulation time.'
     }

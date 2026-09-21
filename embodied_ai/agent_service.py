@@ -112,7 +112,7 @@ class AgentRunManager:
             exports["experiment_manifest"] = str(manifest_path)
         if result.records:
             self.output_directory.mkdir(parents=True, exist_ok=True)
-            jsonl = export_jsonl(result.records, self.output_directory / f"{result.run_id}.jsonl")
+            jsonl = export_jsonl(result.records, self.output_directory / f"{result.run_id}.trajectory.jsonl")
             export_parquet(
                 [
                     {
