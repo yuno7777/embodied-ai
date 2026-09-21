@@ -123,6 +123,13 @@ python -m embodied_ai.cli run --provider cautious --resume-run-id YOUR_LIVE_RUN_
 python -m embodied_ai.cli run --provider cautious --restore-replay-id YOUR_PERSISTED_REPLAY_ID --server-url http://127.0.0.1:8080
 ```
 
+For `--resume-run-id` and `--restore-replay-id`, the resulting experiment
+manifest is reconciled from the Rust replay metadata rather than the CLI's
+defaults. It therefore records the original scenario and version, seed,
+observation mode, generated-world manifest, generator version, and reward
+profile even when the continued run is already terminal and produces no new
+trajectory rows.
+
 Start the Rust server before either command. Rust events are persisted as replayable JSONL plus a structured replay record (including initial and per-step researcher snapshots and the exact filtered observations supplied to the agent) under `data/runs/`; the observer library loads those saved replays after a server restart and supports step/playback controls. Its decision panel shows bounded policy telemetry when supplied, never private reasoning or hidden world state. The Python run and benchmark commands also export step-level Rust observations, decisions, events and metrics as JSONL/Parquet.
 
 `generalize` creates only procedural worlds, keeps its three seed sets disjoint, and writes `generalization_report.json` plus per-episode JSONL. Its defaults match Rust's declared train (`0..7999`), validation (`8000..8999`), and test (`9000..9999`) partitions; explicit ranges remain available for a separately documented experimental split. `--generator-config` applies one config to every split. Alternatively, the three per-partition config flags record a distinct train/validation/test layout or hazard-rule distribution, for example a two-room/electrical training family versus three-room/fire held-out worlds. Each episode records the actual generated hazard kinds, room count, and joint mechanics signature from the Rust world manifest; each split summary stratifies outcomes by hazard family, room topology, and their joint composition, with a Wilson 95% interval for every binary-success slice. `--observation-mode` is persisted in the report, every episode row, and the experiment manifest; compare policies only within a matching sensor mode. Its report includes each split's config, success rate with a Wilson 95% interval, reward, episode length, invalid-action rate, exploration/resource metrics, failure reasons, steps/sec, and train-to-held-out gaps. It evaluates policies; it does not train them.

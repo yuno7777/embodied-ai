@@ -13,6 +13,13 @@ reward overrides combined with live-run resume or replay restore, which retain
 the original evaluator configuration. This prevents manifests from declaring an
 override that was never applied by Rust.
 
+The headless `run` command reads authoritative replay metadata for either form
+of continuation before persisting its immutable experiment manifest. The
+manifest uses Rust's original scenario/version, seed, observation mode, world
+manifest, generator version, and reward profile instead of caller-supplied
+defaults. This also applies to an already-terminal live run, which has no new
+observation or trajectory row to infer provenance from.
+
 Trajectory version dispatch is shared by JSONL export, experiment audit, summary,
 filtering, and world-model conversion. Only an absent `trajectory_schema_version`
 uses legacy handling. A declared version must be the integer `1`; unknown versions,
