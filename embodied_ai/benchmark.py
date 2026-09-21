@@ -458,6 +458,8 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
     for row in episodes:
         if not isinstance(row, dict) or row.get("observation_mode") != report["observation_mode"]:
             raise ValueError("generalization episodes must match the report observation_mode")
+        if row.get("world_manifest") is not None and not isinstance(row.get("world_manifest"), dict):
+            raise ValueError("generalization episode world_manifest must be an object or null")
         expected_config = configs_by_partition.get(row["partition"]) if isinstance(configs_by_partition, dict) else shared_config
         if row.get("generator_config") != expected_config:
             raise ValueError("generalization episodes must match the report generator configuration")
@@ -561,6 +563,12 @@ def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) 
             left_only_success = sum(first.get("outcome") == "escaped" and second.get("outcome") != "escaped" for first, second in pairs)
             right_only_success = sum(first.get("outcome") != "escaped" and second.get("outcome") == "escaped" for first, second in pairs)
             neither_success = len(pairs) - both_success - left_only_success - right_only_success
+            manifests_available = all(
+                isinstance(first.get("world_manifest"), dict) and isinstance(second.get("world_manifest"), dict)
+                for first, second in pairs
+            )
+            if any(first.get("world_manifest") != second.get("world_manifest") for first, second in pairs):
+                raise ValueError("generalization paired episodes must use identical world manifests")
             comparisons[name] = {
                 "episodes": len(pairs),
                 "both_success": both_success,
@@ -568,6 +576,7 @@ def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) 
                 "right_only_success": right_only_success,
                 "neither_success": neither_success,
                 "paired_success_rate_delta": (right_only_success - left_only_success) / len(pairs),
+                "world_manifests_checked": manifests_available,
             }
         return comparisons
     return {

@@ -113,7 +113,26 @@ def test_generalization_comparison_reports_paired_seed_outcomes():
     assert result["paired_episode_comparison"]["test"] == {
         "episodes": 1, "both_success": 0, "left_only_success": 0,
         "right_only_success": 1, "neither_success": 0, "paired_success_rate_delta": 1.0,
+        "world_manifests_checked": False,
     }
+
+
+def test_generalization_paired_comparison_rejects_different_generated_worlds():
+    rows = [
+        {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": None, "world_manifest": {"world_hash": "a"}},
+        {"partition": "validation", "seed": 2, "outcome": "timeout", "observation_mode": "normal", "generator_config": None, "world_manifest": {"world_hash": "b"}},
+        {"partition": "test", "seed": 3, "outcome": "timeout", "observation_mode": "normal", "generator_config": None, "world_manifest": {"world_hash": "c"}},
+    ]
+    left = benchmark.summarize_generalization(rows) | {"engine_version": "rust-v1", "observation_mode": "normal", "world_distribution": {"train": [1], "validation": [2], "test": [3]}, "generator_config": None, "generator_configs_by_partition": None, "episode_results": rows}
+    right_rows = [{**row, "world_manifest": {"world_hash": "wrong"}} if row["seed"] == 3 else row for row in rows]
+    right_summary = benchmark.summarize_generalization(right_rows)
+    right = {**left, "partitions": right_summary["partitions"], "generalization_gap": right_summary["generalization_gap"], "episode_results": right_rows}
+    try:
+        benchmark.compare_generalization_reports(left, right)
+    except ValueError as error:
+        assert "world manifests" in str(error)
+    else:
+        raise AssertionError("paired comparison accepted different generated worlds")
 
 
 def test_generalization_plan_rejects_overlapping_seed_sets():

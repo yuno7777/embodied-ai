@@ -79,4 +79,7 @@ When two compatible reports both retain their per-episode rows,
 `compare-generalization` additionally groups the exact shared seeds into paired
 outcomes: both policies succeed, only the left succeeds, only the right
 succeeds, or neither succeeds. This is descriptive paired evidence for the
-fixed seed study, not a claim of statistical significance.
+fixed seed study, not a claim of statistical significance. When both reports
+retain Rust-generated world manifests, comparison also requires the manifest to
+match for every paired seed; it will not call different generated worlds a
+policy difference.
