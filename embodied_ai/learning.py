@@ -12,16 +12,21 @@ from .schemas import ActionRequest
 from .action_candidates import public_action_candidates
 
 
-def _episode_result(seed: int, step: int, total_reward: float, terminal_reason: str | None, info: dict[str, Any], control_elapsed_ms: float) -> dict[str, Any]:
+def _episode_result(seed: int, step: int, total_reward: float, terminal_reason: str | None, info: dict[str, Any], control_elapsed_ms: float, reset_info: dict[str, Any] | None = None) -> dict[str, Any]:
     """Preserve evaluator-only metrics beside an episode without policy exposure."""
     metrics = info.get("evaluator", {}).get("metrics", {}) if isinstance(info.get("evaluator"), dict) else {}
-    return {
+    result = {
         "seed": seed, "steps": step, "total_reward": total_reward, "terminal_reason": terminal_reason,
         "invalid_actions": metrics.get("invalid_actions"),
         "exploration_coverage": metrics.get("exploration_coverage"),
         "resource_efficiency": metrics.get("resource_efficiency"),
         "control_elapsed_ms": round(control_elapsed_ms, 3),
     }
+    if isinstance(reset_info, dict):
+        for field in ("run_id", "scenario_id", "world_manifest", "reward_config", "observation_mode", "distribution"):
+            if field in reset_info:
+                result[field] = reset_info[field]
+    return result
 
 
 @dataclass(frozen=True)
@@ -179,9 +184,9 @@ def train_tabular_q(
         for seed in seeds:
             policy.reset(seed)
             if reset_options_for_seed:
-                observation, _ = environment.reset(seed=seed, options=reset_options_for_seed(seed))
+                observation, reset_info = environment.reset(seed=seed, options=reset_options_for_seed(seed))
             else:
-                observation, _ = environment.reset(seed=seed)
+                observation, reset_info = environment.reset(seed=seed)
             total_reward = 0.0
             last_info: dict[str, Any] = {}
             started = time.perf_counter()
@@ -196,10 +201,10 @@ def train_tabular_q(
                 policy.update(observation, action, reward, next_observation, terminated=terminated)
                 observation, total_reward = next_observation, total_reward + reward
                 if done:
-                    episodes.append(_episode_result(seed, step, total_reward, info.get("terminal_reason"), info, (time.perf_counter() - started) * 1000))
+                    episodes.append(_episode_result(seed, step, total_reward, info.get("terminal_reason"), info, (time.perf_counter() - started) * 1000, reset_info))
                     break
             else:
-                episodes.append(_episode_result(seed, max_steps, total_reward, "trainer_step_limit", last_info, (time.perf_counter() - started) * 1000))
+                episodes.append(_episode_result(seed, max_steps, total_reward, "trainer_step_limit", last_info, (time.perf_counter() - started) * 1000, reset_info))
     return episodes
 
 
@@ -214,9 +219,9 @@ def evaluate_tabular_q(
     with environment_factory() as environment:
         for seed in seeds:
                 if reset_options_for_seed:
-                    observation, _ = environment.reset(seed=seed, options=reset_options_for_seed(seed))
+                    observation, reset_info = environment.reset(seed=seed, options=reset_options_for_seed(seed))
                 else:
-                    observation, _ = environment.reset(seed=seed)
+                    observation, reset_info = environment.reset(seed=seed)
                 total_reward = 0.0
                 last_info: dict[str, Any] = {}
                 started = time.perf_counter()
@@ -225,10 +230,10 @@ def evaluate_tabular_q(
                     last_info = info
                     observation, total_reward = next_observation, total_reward + reward
                     if terminated or truncated:
-                        episodes.append(_episode_result(seed, step, total_reward, info.get("terminal_reason"), info, (time.perf_counter() - started) * 1000))
+                        episodes.append(_episode_result(seed, step, total_reward, info.get("terminal_reason"), info, (time.perf_counter() - started) * 1000, reset_info))
                         break
                 else:
-                    episodes.append(_episode_result(seed, max_steps, total_reward, "evaluator_step_limit", last_info, (time.perf_counter() - started) * 1000))
+                    episodes.append(_episode_result(seed, max_steps, total_reward, "evaluator_step_limit", last_info, (time.perf_counter() - started) * 1000, reset_info))
     return episodes
 
 

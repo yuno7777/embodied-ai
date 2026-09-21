@@ -161,7 +161,7 @@ with EmbodiedEnv(distribution="train", observation_mode="normal") as env:
             break
 ```
 
-`generalize-tabular` trains once on an explicit procedural train split, freezes the checkpoint, then evaluates that same policy over train, validation, and test splits. It writes an immutable manifest, per-episode JSONL, and a held-out-gap report with authoritative invalid-action, exploration, resource-efficiency, and local rollout-throughput metrics. It is a lifecycle and generalization measurement tool, not a performance claim.
+`generalize-tabular` trains once on an explicit procedural train split, freezes the checkpoint, then evaluates that same policy over train, validation, and test splits. It writes an immutable manifest, per-episode JSONL, and a held-out-gap report with authoritative invalid-action, exploration, resource-efficiency, local rollout-throughput, generated hazard/topology, and Rust world-validation metrics. It is a lifecycle and generalization measurement tool, not a performance claim.
 
 If an in-run provider call exhausts its retries, the runner marks the authoritative run as `provider_error`, persists the partial replay, and returns a clean terminal result instead of leaving an active run behind.
 

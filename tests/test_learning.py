@@ -46,6 +46,19 @@ def test_tabular_episodes_preserve_evaluator_metrics_without_policy_access():
     assert result["control_elapsed_ms"] >= 0
 
 
+def test_tabular_episodes_preserve_reset_world_provenance_without_policy_access():
+    world = {"seed": 1, "world_hash": "fnv1a64:abc"}
+    class Environment:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def reset(self, *, seed): return observation(), {"run_id": "authoritative-run", "world_manifest": world, "reward_config": {"baseline_per_step": -1}}
+        def step(self, _action): return observation(), 2, True, False, {"terminal_reason": "escaped"}
+    result = evaluate_tabular_q(Environment, TabularQPolicy(), [1])[0]
+    assert result["run_id"] == "authoritative-run"
+    assert result["world_manifest"] == world
+    assert result["reward_config"] == {"baseline_per_step": -1}
+
+
 def test_tabular_step_limits_keep_the_last_authoritative_evaluator_metrics():
     class Environment:
         def __enter__(self): return self

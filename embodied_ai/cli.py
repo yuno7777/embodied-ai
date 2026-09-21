@@ -2,7 +2,7 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 from .analysis import check_reproducibility, filter_trajectory, load_jsonl, summarize_trajectory, verify_replay
-from .benchmark import GeneralizationPlan, SeedPartition, audit_generalization_report, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, compare_generalization_reports, evaluate_generalization_remote, generator_config_fingerprint, summarize_generalization
+from .benchmark import GeneralizationPlan, SeedPartition, audit_generalization_report, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, compare_generalization_reports, evaluate_generalization_remote, generated_hazard_kinds, generated_mechanics_signature, generated_room_count, generated_world_validation, generator_config_fingerprint, summarize_generalization
 from .datasets import export_csv, export_jsonl, export_parquet, summarize_world_model_dataset
 from .experiments import ExperimentManifest, audit_experiment_manifest, reconcile_manifest_provenance
 from .environment import EmbodiedEnv, EmbodiedEnvConfig
@@ -148,7 +148,15 @@ def main():
             p.error(str(error))
         checkpoint=policy.save(args.checkpoint); args.output.mkdir(parents=True,exist_ok=True)
         config_fingerprint=generator_config_fingerprint(generator_config)
-        rows=[{'partition':partition, 'outcome':episode['terminal_reason'], 'observation_mode':args.observation_mode, 'generator_config':generator_config, 'generator_config_fingerprint':config_fingerprint, **episode} for partition,episodes in evaluated.items() for episode in episodes]
+        rows=[{
+            'partition':partition, 'outcome':episode['terminal_reason'], 'observation_mode':args.observation_mode,
+            'generator_config':generator_config, 'generator_config_fingerprint':config_fingerprint,
+            'hazard_kinds':generated_hazard_kinds(episode.get('world_manifest')),
+            'room_count':generated_room_count(episode.get('world_manifest')),
+            'mechanics_signature':generated_mechanics_signature(episode.get('world_manifest')),
+            'world_validation':generated_world_validation(episode.get('world_manifest')),
+            **episode,
+        } for partition,episodes in evaluated.items() for episode in episodes]
         manifest=ExperimentManifest(scenario_id='procedural',seed=args.train_start,provider='tabular_q',observation_mode=args.observation_mode,memory_mode='none',memory_window=1,max_steps=args.max_steps,generator_version=1,generated_world={'config':generator_config} if generator_config is not None else {},world_distribution={name:tuple(seeds) for name,seeds in partitions.items()},agent_config={'algorithm':'tabular_q','checkpoint':str(checkpoint),'learning_rate':args.learning_rate,'discount':args.discount,'epsilon':args.epsilon,'phase':'train_validate_test'})
         manifest_path=manifest.persist(args.output)
         report=summarize_generalization(rows) | {'experiment_id':manifest.experiment_id,'experiment_manifest':manifest_path.name,'checkpoint':str(checkpoint),'engine_version':'rust-v1','observation_mode':args.observation_mode,'world_distribution':partitions,'generator_config':generator_config,'generator_configs_by_partition':None,'generator_config_fingerprint':config_fingerprint,'generator_config_fingerprints_by_partition':None,'episode_results':rows}

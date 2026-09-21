@@ -271,3 +271,17 @@ def test_tabular_generalization_cli_trains_once_and_reports_disjoint_partitions(
     assert report['engine_version'] == 'rust-v1' and report['generator_config'] == {'min_rooms': 2, 'max_rooms': 2}
     assert report['generator_config_fingerprint'] == cli.generator_config_fingerprint({'min_rooms': 2, 'max_rooms': 2})
     assert cli.audit_generalization_report(report)['valid'] is True
+
+
+def test_tabular_generalization_cli_exports_actual_generated_world_evidence(monkeypatch, tmp_path):
+    validation = {"geometry_valid": True, "spawn_valid": True, "required_key_reachable": True, "exit_reachable": True, "solvable": True}
+    world = {"scenario": {"hazards": [{"kind": "fire"}], "rooms": [{}, {}, {}]}, "validation": validation}
+    monkeypatch.setattr(cli, 'train_tabular_q', lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(cli, 'evaluate_tabular_partitions', lambda *_args, **_kwargs: {name: [{'seed': seed, 'steps': 1, 'total_reward': 1, 'terminal_reason': 'escaped', 'world_manifest': world}] for name, seed in {'train': 0, 'validation': 8000, 'test': 9000}.items()})
+    monkeypatch.setattr(sys, 'argv', ['embodied-ai', 'generalize-tabular', '--train-count', '1', '--validation-count', '1', '--test-count', '1', '--checkpoint', str(tmp_path / 'policy.json'), '--output', str(tmp_path / 'report'), '--server-url', 'http://sim'])
+    cli.main()
+    report = json.loads((tmp_path / 'report' / 'tabular_generalization_report.json').read_text())
+    episode = report['episode_results'][0]
+    assert episode['hazard_kinds'] == ['fire'] and episode['room_count'] == 3
+    assert episode['world_validation'] == validation
+    assert report['partitions']['train']['world_validation']['all_manifested_solvable'] is True
