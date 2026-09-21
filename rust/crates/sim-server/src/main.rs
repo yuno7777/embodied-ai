@@ -815,9 +815,20 @@ async fn restore_replay(
     state.runs.lock().await.insert(new_id, record);
     Ok((
         StatusCode::CREATED,
-        Json(
-            serde_json::json!({"run_id":new_id,"restored_from":id,"snapshot":snapshot,"observation":observation}),
-        ),
+        Json(serde_json::json!({
+            "run_id":new_id,
+            "restored_from":id,
+            "snapshot":snapshot,
+            "observation":observation,
+            "seed":saved.seed,
+            "scenario_id":saved.scenario_id,
+            "scenario_version":saved.scenario_version,
+            "max_steps":saved.max_steps,
+            "observation_mode":saved.observation_mode,
+            "engine_version":saved.engine_version,
+            "world_manifest":generated_manifest,
+            "reward_config":saved.reward_config,
+        })),
     ))
 }
 async fn archived_replays() -> Json<Vec<Replay>> {
@@ -2410,5 +2421,18 @@ mod tests {
         assert_eq!(restored_json["restored_from"], run_id);
         assert_eq!(restored_json["snapshot"]["step"], 1);
         assert_ne!(restored_json["run_id"], run_id);
+        assert_eq!(restored_json["seed"], 987);
+        assert_eq!(
+            restored_json["scenario_id"],
+            created_json["world_manifest"]["scenario"]["id"]
+        );
+        assert_eq!(
+            restored_json["world_manifest"],
+            created_json["world_manifest"]
+        );
+        assert_eq!(
+            restored_json["reward_config"],
+            created_json["reward_config"]
+        );
     }
 }

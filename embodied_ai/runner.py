@@ -62,6 +62,23 @@ class RustRunClient:
     def stop(self, run_id: str, reason: str) -> dict: return self.client.post(f"/api/runs/{run_id}/stop", json={"reason": reason}).raise_for_status().json()
     def close(self) -> None: self.client.close()
 
+
+def _replay_metadata(payload: dict[str, Any]) -> tuple[dict[str, object], dict | None, dict[str, int] | None, int, str]:
+    """Extract rollout provenance from an authoritative replay response."""
+    scenario_id, scenario_version = payload.get("scenario_id"), payload.get("scenario_version")
+    seed, observation_mode = payload.get("seed"), payload.get("observation_mode")
+    if not isinstance(scenario_id, str) or not scenario_id or type(scenario_version) is not int:
+        raise ValueError("authoritative replay lacks scenario metadata")
+    if type(seed) is not int or seed < 0 or not isinstance(observation_mode, str) or not observation_mode:
+        raise ValueError("authoritative replay lacks seed or observation mode")
+    manifest = payload.get("world_manifest")
+    if manifest is not None and not isinstance(manifest, dict):
+        raise ValueError("authoritative replay has invalid world manifest")
+    rewards = payload.get("reward_config")
+    if rewards is not None and not isinstance(rewards, dict):
+        raise ValueError("authoritative replay has invalid reward configuration")
+    return {"id": scenario_id, "version": scenario_version}, manifest, rewards, seed, observation_mode
+
 def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None, experiment_id: str | None = None, include_research_snapshots: bool = False, policy_state_mode: str = "reset") -> RemoteRunResult:
     if reward_config is not None and (resume_run_id is not None or restore_replay_id is not None):
         raise ValueError("reward_config applies only to new runs; resumed runs retain their original rewards")
@@ -79,8 +96,10 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
         scenario: dict[str, object] | None = None
         world_manifest: dict | None = None
         effective_reward_config: dict[str, int] | None = None
+        record_seed, record_observation_mode = seed, observation_mode
         if restore_replay_id is not None:
             initialization_started=time.perf_counter(); restored=client.restore(restore_replay_id); initialization_latency_ms=(time.perf_counter()-initialization_started)*1000; run_id=restored["run_id"]; observation=restored["observation"]; steps=restored["snapshot"]["step"]
+            scenario, world_manifest, effective_reward_config, record_seed, record_observation_mode = _replay_metadata(restored)
         elif resume_run_id is None:
             initialization_started=time.perf_counter(); created=client.create(seed, max_steps, observation_mode, scenario_id, generated_world, reward_config); initialization_latency_ms=(time.perf_counter()-initialization_started)*1000; run_id=created["run_id"]; observation=created["observation"]; steps=0; effective_reward_config=created.get("reward_config")
             manifest = created.get("world_manifest")
@@ -93,6 +112,7 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
             run_id=resume_run_id; status=client.status(run_id); steps=status["step"]
             if status["done"]: return RemoteRunResult(run_id,status.get("terminal_reason"),steps,[],"run was already terminal",initialization_latency_ms=initialization_latency_ms)
             observation=client.observation(run_id)
+            scenario, world_manifest, effective_reward_config, record_seed, record_observation_mode = _replay_metadata(client.replay(run_id))
         records=[]; total_tokens=0; started=time.monotonic()
         # Snapshots are deliberately captured into export-only records, never
         # into ``observation`` or ``AgentContext`` passed to the provider.
@@ -137,7 +157,7 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 if scenario is None:
                     scenario = client.scenarios()[0]
                 next_research_snapshot = client.snapshot(run_id) if include_research_snapshots else None
-                records.append({"trajectory_schema_version":1,"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"reward_config":effective_reward_config,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":seed,"step":steps,"simulation_time":result.get("simulation_time"),"observation_mode":observation_mode,"policy_state_mode":policy_state_mode,"initialization_latency_ms":initialization_latency_ms,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"agent_metadata":agent_metadata,"events":result["events"],"reward":result["reward"],"reward_breakdown":result.get("reward_breakdown"),"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
+                records.append({"trajectory_schema_version":1,"dataset_schema_version":1,"experiment_id":experiment_id,"world_manifest":world_manifest,"reward_config":effective_reward_config,"run_id":run_id,"scenario_id":scenario["id"],"scenario_version":scenario["version"],"seed":record_seed,"step":steps,"simulation_time":result.get("simulation_time"),"observation_mode":record_observation_mode,"policy_state_mode":policy_state_mode,"initialization_latency_ms":initialization_latency_ms,"observation":observation,"next_observation":result["observation"],"agent_context":provider_context,"allowed_actions":observation["allowed_action_types"],"chosen_action":action.model_dump(exclude_none=True),"action_valid":not any(event["type"]=="InvalidAction" for event in result["events"]),"decision_summary":decision_summary,"agent_metadata":agent_metadata,"events":result["events"],"reward":result["reward"],"reward_breakdown":result.get("reward_breakdown"),"done":result["done"],"terminal_reason":result["terminal_reason"],"metrics":result["metrics"],"provider":provider.name,"model":getattr(provider,"model",None),"latency_ms":provider_latency_ms,"step_latency_ms":step_latency_ms,"token_usage":token_usage,"provider_attempts":getattr(provider,"last_attempts",1),"cumulative_tokens":total_tokens,"control_elapsed_ms":round((time.monotonic()-started)*1000)})
                 if include_research_snapshots:
                     records[-1]["research_snapshot"] = research_snapshot
                     records[-1]["next_research_snapshot"] = next_research_snapshot

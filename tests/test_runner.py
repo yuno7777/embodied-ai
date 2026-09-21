@@ -469,6 +469,9 @@ def test_runner_can_continue_an_existing_nonterminal_authoritative_run(monkeypat
         def create(self, *_args): raise AssertionError("resume must not create a new run")
         def status(self, _run_id): return {"done": self.finished, "paused": False, "step": 4, "terminal_reason": "escaped" if self.finished else None}
         def observation(self, run_id): calls.append(("observation", run_id)); return {"allowed_action_types": ["wait"]}
+        def replay(self, run_id):
+            calls.append(("replay", run_id))
+            return {"seed": 91, "scenario_id": "other_room", "scenario_version": 8, "observation_mode": "noisy", "world_manifest": {"world_hash": "fnv1a64:91"}, "reward_config": {"baseline_per_step": -2}}
         def record_decision(self, *_args): pass
         def step(self, run_id, _action):
             self.finished = True; calls.append(("step", run_id))
@@ -481,7 +484,11 @@ def test_runner_can_continue_an_existing_nonterminal_authoritative_run(monkeypat
     monkeypatch.setattr(runner, "RustRunClient", Client)
     result = runner.run_remote(Provider(), 7, resume_run_id="existing")
     assert result.run_id == "existing" and result.steps == 5 and result.terminal_reason == "escaped"
-    assert calls == [("observation", "existing"), ("step", "existing")]
+    assert calls == [("observation", "existing"), ("replay", "existing"), ("step", "existing")]
+    assert result.records[0]["seed"] == 91
+    assert result.records[0]["scenario_id"] == "other_room"
+    assert result.records[0]["observation_mode"] == "noisy"
+    assert result.records[0]["world_manifest"] == {"world_hash": "fnv1a64:91"}
 
 
 def test_runner_stops_when_wall_clock_budget_is_already_exhausted(monkeypatch):
@@ -508,7 +515,7 @@ def test_runner_restores_a_persisted_replay_before_provider_control(monkeypatch)
         def scenarios(self): return [{"id": "survival_room", "version": 4}]
         def restore(self, replay_id):
             assert replay_id == "saved"
-            return {"run_id":"rebuilt","snapshot":{"step":3},"observation":{"allowed_action_types":["wait"]}}
+            return {"run_id":"rebuilt","snapshot":{"step":3},"observation":{"allowed_action_types":["wait"]},"seed":44,"scenario_id":"restored_world","scenario_version":2,"observation_mode":"rich","world_manifest":{"world_hash":"fnv1a64:44"},"reward_config":{"baseline_per_step":-2}}
         def status(self, _run_id): return {"done":self.finished,"paused":False,"step":3}
         def record_decision(self, *_args): pass
         def step(self, _run_id, _action):
@@ -522,3 +529,6 @@ def test_runner_restores_a_persisted_replay_before_provider_control(monkeypatch)
     monkeypatch.setattr(runner,"RustRunClient",Client)
     result=runner.run_remote(Provider(),7,restore_replay_id="saved")
     assert result.run_id=="rebuilt" and result.steps==4 and result.terminal_reason=="escaped"
+    assert result.records[0]["seed"] == 44
+    assert result.records[0]["scenario_id"] == "restored_world"
+    assert result.records[0]["observation_mode"] == "rich"
