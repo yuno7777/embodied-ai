@@ -15,3 +15,19 @@ Scores are deliberately conservative: 0 means absent, 5 means ready for sustaine
 ## Next milestone
 
 Run and document a repeated tabular-Q train/validation/test study across fixed procedural seeds and registered topology/hazard shifts. This will turn the existing lifecycle workflow into a more meaningful learning experiment without overstating its capability.
+
+## Tabular baseline semantics
+
+`TabularQPolicy` is an infrastructure baseline, not a claim of capable learning.
+Its training update follows the environment's Gymnasium-style split: a true
+`terminated` transition has no bootstrap term, while a `truncated` transition
+retains the successor bootstrap because the world itself has not terminated.
+Only actions proposed from the successor's public observation contribute to
+that bootstrap; unavailable actions cannot inflate it.
+
+Evaluation uses a read-only greedy action path. It does not change epsilon,
+the policy RNG, or the Q table, including when a held-out observation is
+unseen. Older checkpoints with shorter action vectors are read as zero-filled
+without rewriting the checkpoint in memory. This makes repeat evaluation a
+valid frozen-policy measurement, but it does not solve the baseline's remaining
+state-aliasing or small action-encoding limitations.
