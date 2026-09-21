@@ -509,6 +509,9 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
             or any(type(validation.get(field)) is not bool for field in ("geometry_valid", "spawn_valid", "required_key_reachable", "exit_reachable", "solvable"))
         ):
             raise ValueError("generalization episode world_validation must be complete boolean evidence or null")
+        manifest_validation = generated_world_validation(row.get("world_manifest"))
+        if manifest_validation is not None and validation != manifest_validation:
+            raise ValueError("generalization episode world_validation must match its Rust world_manifest")
         expected_config = configs_by_partition.get(row["partition"]) if isinstance(configs_by_partition, dict) else shared_config
         if row.get("generator_config") != expected_config:
             raise ValueError("generalization episodes must match the report generator configuration")

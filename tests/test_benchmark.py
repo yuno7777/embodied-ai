@@ -253,6 +253,25 @@ def test_generalization_provenance_rejects_episode_rows_that_disagree_with_the_r
         raise AssertionError("a fabricated world-validation summary was accepted")
 
 
+def test_generalization_provenance_binds_validation_evidence_to_rust_manifest():
+    validation = {"geometry_valid": True, "spawn_valid": True, "required_key_reachable": True, "exit_reachable": True, "solvable": True}
+    rows = [
+        {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": None, "world_manifest": {"validation": validation}, "world_validation": validation},
+        {"partition": "validation", "seed": 2, "outcome": "timeout", "observation_mode": "normal", "generator_config": None, "world_manifest": {"validation": validation}, "world_validation": validation},
+        {"partition": "test", "seed": 3, "outcome": "timeout", "observation_mode": "normal", "generator_config": None, "world_manifest": {"validation": validation}, "world_validation": validation},
+    ]
+    report = benchmark.summarize_generalization(rows) | {"engine_version": "rust-v1", "observation_mode": "normal", "world_distribution": {"train": [1], "validation": [2], "test": [3]}, "generator_config": None, "generator_configs_by_partition": None, "episode_results": rows}
+    benchmark.validate_generalization_report(report)
+    false_validation = {**validation, "solvable": False}
+    tampered = {**report, "episode_results": [{**rows[0], "world_validation": false_validation}, *rows[1:]]}
+    try:
+        benchmark.validate_generalization_report(tampered)
+    except ValueError as error:
+        assert "Rust world_manifest" in str(error)
+    else:
+        raise AssertionError("world validation was allowed to disagree with its manifest")
+
+
 def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):
     def fake_run(provider, seed, _base_url, **kwargs):
         expected = {"seed": seed, "config": {"min_width": 9, "max_width": 9}}
