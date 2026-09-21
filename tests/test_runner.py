@@ -484,11 +484,29 @@ def test_runner_can_continue_an_existing_nonterminal_authoritative_run(monkeypat
     monkeypatch.setattr(runner, "RustRunClient", Client)
     result = runner.run_remote(Provider(), 7, resume_run_id="existing")
     assert result.run_id == "existing" and result.steps == 5 and result.terminal_reason == "escaped"
-    assert calls == [("observation", "existing"), ("replay", "existing"), ("step", "existing")]
+    assert calls == [("replay", "existing"), ("observation", "existing"), ("step", "existing")]
     assert result.records[0]["seed"] == 91
     assert result.records[0]["scenario_id"] == "other_room"
     assert result.records[0]["observation_mode"] == "noisy"
     assert result.records[0]["world_manifest"] == {"world_hash": "fnv1a64:91"}
+    assert result.provenance == {"scenario_id": "other_room", "scenario_version": 8, "seed": 91, "observation_mode": "noisy", "world_manifest": {"world_hash": "fnv1a64:91"}, "reward_config": {"baseline_per_step": -2}}
+
+
+def test_terminal_resume_returns_authoritative_provenance_without_observing(monkeypatch):
+    calls = []
+    class Client:
+        def __init__(self, _base_url): pass
+        def status(self, run_id): calls.append(("status", run_id)); return {"done": True, "paused": False, "step": 5, "terminal_reason": "escaped"}
+        def replay(self, run_id):
+            calls.append(("replay", run_id))
+            return {"seed": 91, "scenario_id": "other_room", "scenario_version": 8, "observation_mode": "noisy", "world_manifest": {"world_hash": "fnv1a64:91"}, "reward_config": {"baseline_per_step": -2}}
+        def observation(self, _run_id): raise AssertionError("terminal run must not be observed")
+        def close(self): pass
+    monkeypatch.setattr(runner, "RustRunClient", Client)
+    result = runner.run_remote(object(), 7, resume_run_id="existing")
+    assert result.records == [] and result.stop_detail == "run was already terminal"
+    assert calls == [("status", "existing"), ("replay", "existing")]
+    assert result.provenance is not None and result.provenance["seed"] == 91
 
 
 def test_runner_stops_when_wall_clock_budget_is_already_exhausted(monkeypatch):

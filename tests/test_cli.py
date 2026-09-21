@@ -38,6 +38,20 @@ def test_run_cli_requests_a_generated_world_and_records_its_manifest(monkeypatch
     assert list(tmp_path.glob("*.experiment.json"))
 
 
+def test_run_cli_reconciles_continued_manifest_with_authoritative_provenance(monkeypatch, tmp_path):
+    provenance = {"scenario_id": "other_room", "scenario_version": 8, "seed": 91, "observation_mode": "noisy", "world_manifest": {"world_hash": "fnv1a64:91", "generator_version": 1}, "reward_config": {"baseline_per_step": -2}}
+    monkeypatch.setattr(cli, "run_remote", lambda *_args, **_kwargs: RemoteRunResult("existing", "escaped", 5, [], provenance=provenance))
+    monkeypatch.setattr(cli, "export_jsonl", lambda _records, path: path)
+    monkeypatch.setattr(cli, "export_parquet", lambda _records, _path: None)
+    monkeypatch.setattr(sys, "argv", ["embodied-ai", "run", "--resume-run-id", "existing", "--seed", "7", "--observation-mode", "normal", "--server-url", "http://sim", "--output", str(tmp_path)])
+    cli.main()
+    manifest = json.loads(next(tmp_path.glob("*.experiment.json")).read_text(encoding="utf-8"))
+    assert manifest["scenario_id"] == "other_room" and manifest["scenario_version"] == 8
+    assert manifest["seed"] == 91 and manifest["observation_mode"] == "noisy"
+    assert manifest["generated_world"] == provenance["world_manifest"]
+    assert manifest["generator_version"] == 1 and manifest["reward_config"] == {"baseline_per_step": -2}
+
+
 def test_run_cli_forwards_a_generator_config_file(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setattr(cli, "run_remote", lambda *_args, **kwargs: (captured.update(kwargs) or RemoteRunResult("run-1", "timeout", 0, [])))

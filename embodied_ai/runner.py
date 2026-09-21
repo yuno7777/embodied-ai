@@ -17,6 +17,7 @@ class RemoteRunResult:
     stop_detail: str | None = None
     world_manifest: dict | None = None
     initialization_latency_ms: float | None = None
+    provenance: dict[str, Any] | None = None
 
 class RustRunClient:
     def __init__(self, base_url: str="http://127.0.0.1:8080", timeout: float=15): self.client=httpx.Client(base_url=base_url, timeout=timeout)
@@ -79,6 +80,18 @@ def _replay_metadata(payload: dict[str, Any]) -> tuple[dict[str, object], dict |
         raise ValueError("authoritative replay has invalid reward configuration")
     return {"id": scenario_id, "version": scenario_version}, manifest, rewards, seed, observation_mode
 
+
+def _run_provenance(scenario: dict[str, object], world_manifest: dict | None, reward_config: dict[str, int] | None, seed: int, observation_mode: str) -> dict[str, Any]:
+    """Return the server-authoritative identity used by a persisted run."""
+    return {
+        "scenario_id": scenario["id"],
+        "scenario_version": scenario["version"],
+        "seed": seed,
+        "observation_mode": observation_mode,
+        "world_manifest": world_manifest,
+        "reward_config": reward_config,
+    }
+
 def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memory_mode: str="recent", max_steps: int | None = None, observation_mode: str = "normal", on_created: Callable[[str], None] | None = None, max_wall_seconds: float | None = None, max_total_tokens: int | None = None, resume_run_id: str | None = None, restore_replay_id: str | None = None, memory_window: int = 5, scenario_id: str | None = None, generated_world: dict[str, Any] | None = None, reward_config: dict[str, int] | None = None, experiment_id: str | None = None, include_research_snapshots: bool = False, policy_state_mode: str = "reset") -> RemoteRunResult:
     if reward_config is not None and (resume_run_id is not None or restore_replay_id is not None):
         raise ValueError("reward_config applies only to new runs; resumed runs retain their original rewards")
@@ -97,6 +110,7 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
         world_manifest: dict | None = None
         effective_reward_config: dict[str, int] | None = None
         record_seed, record_observation_mode = seed, observation_mode
+        provenance: dict[str, Any] | None = None
         if restore_replay_id is not None:
             initialization_started=time.perf_counter(); restored=client.restore(restore_replay_id); initialization_latency_ms=(time.perf_counter()-initialization_started)*1000; run_id=restored["run_id"]; observation=restored["observation"]; steps=restored["snapshot"]["step"]
             scenario, world_manifest, effective_reward_config, record_seed, record_observation_mode = _replay_metadata(restored)
@@ -110,9 +124,13 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                 scenario = client.scenarios()[0]
         else:
             run_id=resume_run_id; status=client.status(run_id); steps=status["step"]
-            if status["done"]: return RemoteRunResult(run_id,status.get("terminal_reason"),steps,[],"run was already terminal",initialization_latency_ms=initialization_latency_ms)
-            observation=client.observation(run_id)
             scenario, world_manifest, effective_reward_config, record_seed, record_observation_mode = _replay_metadata(client.replay(run_id))
+            provenance = _run_provenance(scenario, world_manifest, effective_reward_config, record_seed, record_observation_mode)
+            if status["done"]: return RemoteRunResult(run_id,status.get("terminal_reason"),steps,[],"run was already terminal",initialization_latency_ms=initialization_latency_ms,provenance=provenance)
+            observation=client.observation(run_id)
+        if scenario is None:
+            raise ValueError("server did not provide scenario metadata")
+        provenance = _run_provenance(scenario, world_manifest, effective_reward_config, record_seed, record_observation_mode)
         records=[]; total_tokens=0; started=time.monotonic()
         # Snapshots are deliberately captured into export-only records, never
         # into ``observation`` or ``AgentContext`` passed to the provider.
@@ -123,10 +141,10 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
             while True:
                 if max_wall_seconds is not None and time.monotonic() - started >= max_wall_seconds:
                     client.stop(run_id, "client_timeout")
-                    return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted",world_manifest,initialization_latency_ms)
+                    return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted",world_manifest,initialization_latency_ms,provenance)
                 status = client.status(run_id)
                 if status["done"]:
-                    return RemoteRunResult(run_id, status.get("terminal_reason"), status["step"], records, world_manifest=world_manifest, initialization_latency_ms=initialization_latency_ms)
+                    return RemoteRunResult(run_id, status.get("terminal_reason"), status["step"], records, world_manifest=world_manifest, initialization_latency_ms=initialization_latency_ms, provenance=provenance)
                 if status["paused"]:
                     time.sleep(0.1)
                     continue
@@ -145,12 +163,12 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                     provider_latency_ms=0; decision_summary="provider action submitted to Rust authority"; agent_metadata=None
                 if max_wall_seconds is not None and time.monotonic() - started >= max_wall_seconds:
                     client.stop(run_id, "client_timeout")
-                    return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted during provider decision",world_manifest,initialization_latency_ms)
+                    return RemoteRunResult(run_id,"client_timeout",steps,records,"wall-clock budget exhausted during provider decision",world_manifest,initialization_latency_ms,provenance)
                 token_usage = getattr(provider, "last_token_usage", None)
                 decision_tokens = (token_usage or {}).get("total_tokens", 0)
                 if max_total_tokens is not None and total_tokens + decision_tokens > max_total_tokens:
                     client.stop(run_id, "token_budget_exhausted")
-                    return RemoteRunResult(run_id,"token_budget_exhausted",steps,records,f"token budget {max_total_tokens} exceeded",world_manifest,initialization_latency_ms)
+                    return RemoteRunResult(run_id,"token_budget_exhausted",steps,records,f"token budget {max_total_tokens} exceeded",world_manifest,initialization_latency_ms,provenance)
                 total_tokens += decision_tokens
                 client.record_decision(run_id, action, decision_summary, provider.name, getattr(provider, "model", None), provider_latency_ms, token_usage, agent_metadata)
                 step_started=time.perf_counter(); result=client.step(run_id,action); step_latency_ms=(time.perf_counter()-step_started)*1000; steps=result["step_number"]
@@ -169,10 +187,10 @@ def run_remote(provider, seed: int, base_url: str="http://127.0.0.1:8080", memor
                     result["events"],
                     perceived_messages if isinstance(perceived_messages, list) else [],
                 ); observation=result["observation"]; research_snapshot = next_research_snapshot
-                if result["done"]: return RemoteRunResult(run_id,result["terminal_reason"],steps,records,world_manifest=world_manifest,initialization_latency_ms=initialization_latency_ms)
+                if result["done"]: return RemoteRunResult(run_id,result["terminal_reason"],steps,records,world_manifest=world_manifest,initialization_latency_ms=initialization_latency_ms,provenance=provenance)
         except Exception:
             if run_id is None:
                 raise
             client.provider_error(run_id)
-            return RemoteRunResult(run_id,"provider_error",steps,records,world_manifest=world_manifest,initialization_latency_ms=initialization_latency_ms)
+            return RemoteRunResult(run_id,"provider_error",steps,records,world_manifest=world_manifest,initialization_latency_ms=initialization_latency_ms,provenance=provenance)
     finally: client.close()
