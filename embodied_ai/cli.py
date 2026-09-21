@@ -4,7 +4,7 @@ from pathlib import Path
 from .analysis import check_reproducibility, filter_trajectory, load_jsonl, summarize_trajectory, verify_replay
 from .benchmark import GeneralizationPlan, SeedPartition, audit_generalization_report, benchmark_parallel_scaling, benchmark_remote, compare_benchmarks, compare_generalization_reports, evaluate_generalization_remote, generated_hazard_kinds, generated_mechanics_signature, generated_room_count, generated_world_validation, generator_config_fingerprint, summarize_generalization
 from .datasets import export_csv, export_jsonl, export_parquet, summarize_world_model_dataset
-from .experiments import ExperimentManifest, audit_experiment_manifest, reconcile_manifest_provenance
+from .experiments import ExperimentManifest, audit_experiment_manifest, load_experiment_manifest, reconcile_manifest_provenance
 from .environment import EmbodiedEnv, EmbodiedEnvConfig
 from .learning import TabularQConfig, TabularQPolicy, checkpoint_fingerprint, evaluate_tabular_partitions, evaluate_tabular_q, train_tabular_q
 from .paths import ROOT
@@ -40,7 +40,7 @@ def main():
     c=sub.add_parser('analyze'); c.add_argument('--trajectory',type=Path,required=True); c.add_argument('--output',type=Path)
     d=sub.add_parser('compare'); d.add_argument('--left',type=Path,required=True); d.add_argument('--right',type=Path,required=True); d.add_argument('--output',type=Path)
     generalization_compare=sub.add_parser('compare-generalization'); generalization_compare.add_argument('--left',type=Path,required=True); generalization_compare.add_argument('--right',type=Path,required=True); generalization_compare.add_argument('--output',type=Path)
-    generalization_audit=sub.add_parser('audit-generalization'); generalization_audit.add_argument('--report',type=Path,required=True); generalization_audit.add_argument('--checkpoint',type=Path,help='Verify a tabular checkpoint against checkpoint_fingerprint in the report.'); generalization_audit.add_argument('--output',type=Path)
+    generalization_audit=sub.add_parser('audit-generalization'); generalization_audit.add_argument('--report',type=Path,required=True); generalization_audit.add_argument('--manifest',type=Path,help='Verify report provenance against an immutable experiment manifest.'); generalization_audit.add_argument('--checkpoint',type=Path,help='Verify a tabular checkpoint against checkpoint_fingerprint in the report.'); generalization_audit.add_argument('--output',type=Path)
     e=sub.add_parser('filter'); e.add_argument('--trajectory',type=Path,required=True); e.add_argument('--output',type=Path,required=True); e.add_argument('--action-type'); e.add_argument('--event-type'); e.add_argument('--valid-only',action='store_true'); e.add_argument('--csv',action='store_true')
     dataset_audit=sub.add_parser('audit-dataset'); dataset_audit.add_argument('--trajectory',type=Path,required=True); dataset_audit.add_argument('--output',type=Path)
     experiment_audit=sub.add_parser('audit-experiment'); experiment_audit.add_argument('--manifest',type=Path,required=True); experiment_audit.add_argument('--trajectory',type=Path); experiment_audit.add_argument('--output',type=Path)
@@ -184,6 +184,24 @@ def main():
         try:
             source_report=json.loads(args.report.read_text(encoding='utf-8'))
             report=audit_generalization_report(source_report)
+            if args.manifest is not None:
+                manifest=load_experiment_manifest(args.manifest)
+                expected_distribution={name:list(seeds) for name,seeds in (manifest.world_distribution or {}).items()}
+                checks={
+                    'experiment_id': manifest.experiment_id,
+                    'experiment_fingerprint': manifest.fingerprint(),
+                    'engine_version': manifest.engine_version,
+                    'provider': manifest.provider,
+                    'model': manifest.model,
+                    'observation_mode': manifest.observation_mode,
+                    'world_distribution': expected_distribution,
+                }
+                if any(source_report.get(field) != expected for field,expected in checks.items()):
+                    raise ValueError('generalization report does not match the supplied experiment manifest')
+                report['experiment_manifest_checked']=True
+                report['experiment_manifest_fingerprint']=manifest.fingerprint()
+            else:
+                report['experiment_manifest_checked']=False
             if args.checkpoint is not None:
                 expected=source_report.get('checkpoint_fingerprint')
                 if not isinstance(expected,str) or not expected.startswith('sha256:'):

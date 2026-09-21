@@ -107,6 +107,7 @@ python -m embodied_ai.cli generalize --provider cautious --train-generator-confi
 python -m embodied_ai.cli generalize --provider cautious --observation-mode noisy --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli generalize --provider gemini --model YOUR_GEMINI_MODEL --server-url http://127.0.0.1:8080
 python -m embodied_ai.cli audit-generalization --report data/exports/generalization/generalization_report.json
+python -m embodied_ai.cli audit-generalization --report data/exports/generalization/generalization_report.json --manifest data/exports/generalization/YOUR_EXPERIMENT.experiment.json
 python -m embodied_ai.cli audit-generalization --report data/exports/tabular-generalization/tabular_generalization_report.json --checkpoint data/checkpoints/tabular_q_generalization.json
 python -m embodied_ai.cli audit-dataset --trajectory data/runs/YOUR_RUN.trajectory.jsonl
 python -m embodied_ai.cli audit-experiment --manifest data/runs/YOUR_EXPERIMENT.experiment.json --trajectory data/runs/YOUR_RUN.trajectory.jsonl

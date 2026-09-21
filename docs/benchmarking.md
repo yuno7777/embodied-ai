@@ -78,6 +78,10 @@ overlapping seed splits, ambiguous shared versus per-split generator
 configuration, and any supplied episode evidence that does not reconstruct the
 claimed split summaries.
 
+Pass `--manifest <experiment.experiment.json>` to additionally bind the report
+to its immutable experiment ID/fingerprint, engine, provider/model, observation
+mode, and explicit seed distribution.
+
 Generated reports include a SHA-256 fingerprint for their canonical shared
 generator configuration, or one fingerprint per split when layouts differ.
 The audit receipt exposes these identities without requiring a researcher to

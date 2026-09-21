@@ -176,6 +176,26 @@ def test_audit_generalization_cli_verifies_a_tabular_checkpoint(monkeypatch, tmp
     assert error.value.code == 2
 
 
+def test_audit_generalization_cli_verifies_its_experiment_manifest(monkeypatch, tmp_path, capsys):
+    manifest = cli.ExperimentManifest(experiment_id='study', scenario_id='procedural', seed=1, provider='scripted', observation_mode='normal', memory_mode='none', memory_window=1, world_distribution={'train': (1,), 'validation': (2,), 'test': (3,)})
+    manifest_path = manifest.persist(tmp_path)
+    rows = [
+        {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": None, "provider": "scripted", "model": None},
+        {"partition": "validation", "seed": 2, "outcome": "timeout", "observation_mode": "normal", "generator_config": None, "provider": "scripted", "model": None},
+        {"partition": "test", "seed": 3, "outcome": "timeout", "observation_mode": "normal", "generator_config": None, "provider": "scripted", "model": None},
+    ]
+    source = cli.summarize_generalization(rows) | {'experiment_id': 'study', 'experiment_fingerprint': manifest.fingerprint(), 'engine_version': 'rust-v1', 'provider': 'scripted', 'model': None, 'observation_mode': 'normal', 'world_distribution': {'train': [1], 'validation': [2], 'test': [3]}, 'generator_config': None, 'generator_configs_by_partition': None, 'episode_results': rows}
+    report_path = tmp_path / 'report.json'; report_path.write_text(json.dumps(source), encoding='utf-8')
+    monkeypatch.setattr(sys, 'argv', ['embodied-ai', 'audit-generalization', '--report', str(report_path), '--manifest', str(manifest_path)])
+    cli.main()
+    assert '"experiment_manifest_checked": true' in capsys.readouterr().out
+    source['experiment_fingerprint'] = 'sha256:wrong'; report_path.write_text(json.dumps(source), encoding='utf-8')
+    monkeypatch.setattr(sys, 'argv', ['embodied-ai', 'audit-generalization', '--report', str(report_path), '--manifest', str(manifest_path)])
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 2
+
+
 def test_generalize_cli_defaults_match_authoritative_seed_partitions(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setattr(
