@@ -26,8 +26,8 @@ The benchmark report records the selected provider. Python providers only propos
 Inspect a single exported JSONL trajectory locally without a server or model key:
 
 ```powershell
-python -m embodied_ai.cli analyze --trajectory data/runs/<run-id>.jsonl
-python -m embodied_ai.cli filter --trajectory data/runs/<run-id>.jsonl --valid-only --action-type move --output data/moves.csv --csv
+python -m embodied_ai.cli analyze --trajectory data/runs/<run-id>.trajectory.jsonl
+python -m embodied_ai.cli filter --trajectory data/runs/<run-id>.trajectory.jsonl --valid-only --action-type move --output data/moves.csv --csv
 python -m embodied_ai.cli verify-replay --replay data/runs/<run-id>.replay.json
 python -m embodied_ai.cli check-reproducibility --left data/run-a.replay.json --right data/run-b.replay.json
 ```
