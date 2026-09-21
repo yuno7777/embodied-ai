@@ -28,6 +28,16 @@ caller-provided seed and sensor arguments are therefore not allowed to relabel
 continued data. A replay missing this required metadata is rejected rather than
 exported with guessed provenance.
 
+## Provider memory boundary
+
+The runner retains compact action/fact context for providers only after Rust has
+generated the next public observation. It admits a selected action fact only
+when its exact message occurs in that observation's `recent_events` sensor
+field. Raw transition events remain available to researchers and evaluators in
+the trajectory, but global perturbations or other non-perceivable events cannot
+become provider memory. This is intentionally a small working-memory baseline,
+not episodic retrieval or learned semantic memory.
+
 ```text
 Policy / provider / future learner
         │ AgentObservation + typed ActionRequest
