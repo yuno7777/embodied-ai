@@ -272,6 +272,31 @@ def test_generalization_provenance_binds_validation_evidence_to_rust_manifest():
         raise AssertionError("world validation was allowed to disagree with its manifest")
 
 
+def test_generalization_provenance_binds_retained_world_seed_and_config():
+    config = {"min_rooms": 2}
+    rows = [
+        {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": config, "world_manifest": {"seed": 1, "generator_config": {"min_rooms": 2}}},
+        {"partition": "validation", "seed": 2, "outcome": "timeout", "observation_mode": "normal", "generator_config": config, "world_manifest": {"seed": 2, "generator_config": {"min_rooms": 2}}},
+        {"partition": "test", "seed": 3, "outcome": "timeout", "observation_mode": "normal", "generator_config": config, "world_manifest": {"seed": 3, "generator_config": {"min_rooms": 2}}},
+    ]
+    report = benchmark.summarize_generalization(rows) | {"engine_version": "rust-v1", "observation_mode": "normal", "world_distribution": {"train": [1], "validation": [2], "test": [3]}, "generator_config": config, "generator_configs_by_partition": None, "episode_results": rows}
+    benchmark.validate_generalization_report(report)
+    wrong_seed = {**report, "episode_results": [{**rows[0], "world_manifest": {"seed": 9, "generator_config": config}}, *rows[1:]]}
+    try:
+        benchmark.validate_generalization_report(wrong_seed)
+    except ValueError as error:
+        assert "world_manifest seed" in str(error)
+    else:
+        raise AssertionError("world manifest seed drift was accepted")
+    wrong_config = {**report, "episode_results": [{**rows[0], "world_manifest": {"seed": 1, "generator_config": {"min_rooms": 3}}}, *rows[1:]]}
+    try:
+        benchmark.validate_generalization_report(wrong_config)
+    except ValueError as error:
+        assert "world_manifest generator_config" in str(error)
+    else:
+        raise AssertionError("world manifest configuration drift was accepted")
+
+
 def test_generalization_evaluation_uses_procedural_worlds_and_writes_report(monkeypatch, tmp_path):
     def fake_run(provider, seed, _base_url, **kwargs):
         expected = {"seed": seed, "config": {"min_width": 9, "max_width": 9}}

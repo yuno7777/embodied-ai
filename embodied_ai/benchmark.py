@@ -515,6 +515,17 @@ def validate_generalization_report(report: dict[str, Any]) -> None:
         expected_config = configs_by_partition.get(row["partition"]) if isinstance(configs_by_partition, dict) else shared_config
         if row.get("generator_config") != expected_config:
             raise ValueError("generalization episodes must match the report generator configuration")
+        world_manifest = row.get("world_manifest")
+        if isinstance(world_manifest, dict):
+            manifest_seed = world_manifest.get("seed")
+            if manifest_seed is not None and (type(manifest_seed) is not int or manifest_seed != row["seed"]):
+                raise ValueError("generalization episode world_manifest seed must match its declared seed")
+            manifest_config = world_manifest.get("generator_config")
+            if manifest_config is not None:
+                if not isinstance(manifest_config, dict):
+                    raise ValueError("generalization episode world_manifest generator_config must be an object")
+                if expected_config is not None and any(manifest_config.get(key) != value for key, value in expected_config.items()):
+                    raise ValueError("generalization episode world_manifest generator_config must match its selected config")
         if "generator_config_fingerprint" in row and row.get("generator_config_fingerprint") != generator_config_fingerprint(expected_config):
             raise ValueError("generalization episode generator configuration fingerprint does not match")
     for name, summary in partitions.items():

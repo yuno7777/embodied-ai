@@ -84,7 +84,9 @@ is available. Split summaries expose how many worlds carried that evidence and
 how many passed geometry, spawn, key-reachability, exit-reachability, and full
 solvability checks. `audit-generalization` reconstructs this summary from the
 episode rows before accepting it, and requires any retained validation block to
-match the corresponding Rust world manifest.
+match the corresponding Rust world manifest. If that manifest retains a seed or
+generator configuration, the audit also binds them to the episode's declared
+seed and selected generator settings.
 
 When two compatible reports both retain their per-episode rows,
 `compare-generalization` additionally groups the exact shared seeds into paired
