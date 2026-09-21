@@ -542,9 +542,38 @@ def compare_generalization_reports(left: dict[str, Any], right: dict[str, Any]) 
             }
             for signature in sorted(set(left_mechanics) | set(right_mechanics))
         }
+    def paired_episode_comparison() -> dict[str, Any] | None:
+        """Show paired success changes when both reports retain episode evidence."""
+        left_episodes, right_episodes = left.get("episode_results"), right.get("episode_results")
+        if not isinstance(left_episodes, list) or not isinstance(right_episodes, list):
+            return None
+        left_by_seed = {(row["partition"], row["seed"]): row for row in left_episodes}
+        right_by_seed = {(row["partition"], row["seed"]): row for row in right_episodes}
+        if set(left_by_seed) != set(right_by_seed):
+            raise ValueError("generalization reports must retain the same episode seeds for paired comparison")
+        comparisons: dict[str, Any] = {}
+        for name in sorted(expected):
+            pairs = [
+                (left_by_seed[(name, seed)], right_by_seed[(name, seed)])
+                for seed in left["world_distribution"][name]
+            ]
+            both_success = sum(first.get("outcome") == "escaped" and second.get("outcome") == "escaped" for first, second in pairs)
+            left_only_success = sum(first.get("outcome") == "escaped" and second.get("outcome") != "escaped" for first, second in pairs)
+            right_only_success = sum(first.get("outcome") != "escaped" and second.get("outcome") == "escaped" for first, second in pairs)
+            neither_success = len(pairs) - both_success - left_only_success - right_only_success
+            comparisons[name] = {
+                "episodes": len(pairs),
+                "both_success": both_success,
+                "left_only_success": left_only_success,
+                "right_only_success": right_only_success,
+                "neither_success": neither_success,
+                "paired_success_rate_delta": (right_only_success - left_only_success) / len(pairs),
+            }
+        return comparisons
     return {
         "engine_version": left.get("engine_version"), "observation_mode": left.get("observation_mode"),
         "left_experiment_id": left.get("experiment_id"), "right_experiment_id": right.get("experiment_id"),
         "partitions": {name: {**{f"{metric}_delta": delta(left_partitions[name].get(metric), right_partitions[name].get(metric)) for metric in metrics}, "hazard_kind_breakdown": hazard_deltas(name), "room_count_breakdown": room_count_deltas(name), "mechanics_breakdown": mechanics_deltas(name)} for name in sorted(expected)},
         "generalization_gap": {key + "_delta": delta(left.get("generalization_gap", {}).get(key), right.get("generalization_gap", {}).get(key)) for key in ("train_minus_validation_success_rate", "train_minus_test_success_rate")},
+        "paired_episode_comparison": paired_episode_comparison(),
     }

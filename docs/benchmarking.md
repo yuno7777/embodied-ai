@@ -74,3 +74,9 @@ Generated reports include a SHA-256 fingerprint for their canonical shared
 generator configuration, or one fingerprint per split when layouts differ.
 The audit receipt exposes these identities without requiring a researcher to
 visually compare JSON key order.
+
+When two compatible reports both retain their per-episode rows,
+`compare-generalization` additionally groups the exact shared seeds into paired
+outcomes: both policies succeed, only the left succeeds, only the right
+succeeds, or neither succeeds. This is descriptive paired evidence for the
+fixed seed study, not a claim of statistical significance.

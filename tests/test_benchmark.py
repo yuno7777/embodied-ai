@@ -90,6 +90,32 @@ def test_generalization_comparison_requires_matching_conditions_and_reports_delt
         raise AssertionError("reports with missing provenance were compared")
 
 
+def test_generalization_comparison_reports_paired_seed_outcomes():
+    rows = [
+        {"partition": "train", "seed": 1, "outcome": "escaped", "observation_mode": "normal", "generator_config": None},
+        {"partition": "validation", "seed": 2, "outcome": "timeout", "observation_mode": "normal", "generator_config": None},
+        {"partition": "test", "seed": 3, "outcome": "timeout", "observation_mode": "normal", "generator_config": None},
+    ]
+    left = benchmark.summarize_generalization(rows) | {
+        "engine_version": "rust-v1", "observation_mode": "normal",
+        "world_distribution": {"train": [1], "validation": [2], "test": [3]},
+        "generator_config": None, "generator_configs_by_partition": None,
+        "episode_results": rows,
+    }
+    right_rows = [{**row, "outcome": "escaped"} if row["partition"] == "test" else row for row in rows]
+    right = benchmark.summarize_generalization(right_rows) | {
+        **{key: value for key, value in left.items() if key not in {"partitions", "generalization_gap", "episode_results"}},
+        "partitions": benchmark.summarize_generalization(right_rows)["partitions"],
+        "generalization_gap": benchmark.summarize_generalization(right_rows)["generalization_gap"],
+        "episode_results": right_rows,
+    }
+    result = benchmark.compare_generalization_reports(left, right)
+    assert result["paired_episode_comparison"]["test"] == {
+        "episodes": 1, "both_success": 0, "left_only_success": 0,
+        "right_only_success": 1, "neither_success": 0, "paired_success_rate_delta": 1.0,
+    }
+
+
 def test_generalization_plan_rejects_overlapping_seed_sets():
     train = benchmark.SeedPartition.from_range("train", 0, 2)
     validation = benchmark.SeedPartition.from_range("validation", 2, 3)
